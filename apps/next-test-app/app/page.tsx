@@ -11,7 +11,7 @@ export default function HomePage() {
 
       <section className="card-row">
         <article className="card">
-          <h2>Card A</h2>
+          <h2>Card Adf</h2>
           <p>This element should get data source coordinates in webpack mode.</p>
         </article>
         <article className="card">
