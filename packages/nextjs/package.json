@@ -1,0 +1,50 @@
+{
+  "name": "@fdb/nextjs",
+  "version": "0.1.0",
+  "description": "Next.js source inspector adapter",
+  "main": "build/src/index.js",
+  "module": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./build/src/index.d.ts",
+      "require": "./build/src/index.js",
+      "import": "./build/src/index.js"
+    },
+    "./overlay": {
+      "types": "./build/src/overlay.d.ts",
+      "require": "./build/src/overlay.js",
+      "import": "./build/src/overlay.js"
+    }
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "clean": "rm -rf build",
+    "build": "tsc -p tsconfig.json",
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": [
+    "nextjs",
+    "source-map",
+    "debug",
+    "inspector"
+  ],
+  "author": "Couch Heroes",
+  "license": "MIT",
+  "dependencies": {
+    "@couch-heroes/source-inspector-core": "0.1.0",
+    "@fdb/react": "0.1.0"
+  },
+  "peerDependencies": {
+    "next": ">=14",
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2"
+  }
+}

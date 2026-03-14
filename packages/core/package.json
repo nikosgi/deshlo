@@ -1,0 +1,42 @@
+{
+  "name": "@fdb/core",
+  "version": "0.1.0",
+  "description": "Shared source inspector utilities and webpack loader injection",
+  "main": "build/src/index.js",
+  "module": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./build/src/index.d.ts",
+      "require": "./build/src/index.js",
+      "import": "./build/src/index.js"
+    },
+    "./loader/jsx-source-loader.cjs": "./loader/jsx-source-loader.cjs"
+  },
+  "files": [
+    "build",
+    "loader"
+  ],
+  "scripts": {
+    "clean": "rm -rf build",
+    "build": "tsc -p tsconfig.json",
+    "test": "echo \"No tests yet\""
+  },
+  "keywords": [
+    "source-map",
+    "debug",
+    "inspector"
+  ],
+  "author": "Nikos Gerontakis",
+  "license": "MIT",
+  "dependencies": {
+    "@babel/generator": "^7.28.3",
+    "@babel/parser": "^7.28.4",
+    "@babel/traverse": "^7.29.0",
+    "@babel/types": "^7.28.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1"
+  }
+}

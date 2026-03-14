@@ -1,0 +1,22 @@
+{
+  "name": "source-inspector-workspace",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "clean": "yarn workspace @fdb/nextjs clean && yarn workspace @fdb/react clean && yarn workspace @fdb/vue clean && yarn workspace @couch-heroes/source-inspector-core clean",
+    "build": "yarn workspace @couch-heroes/source-inspector-core build && yarn workspace @fdb/react build && yarn workspace @fdb/vue build && yarn workspace @fdb/nextjs build",
+    "test": "yarn workspace @couch-heroes/source-inspector-core test && yarn workspace @fdb/react test && yarn workspace @fdb/vue test && yarn workspace @fdb/nextjs test",
+    "dev:test-app": "yarn workspace @fdb/next-test-app dev",
+    "build:test-app": "yarn workspace @fdb/next-test-app build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "npm": "please-use-yarn",
+    "yarn": ">=1.22.22"
+  }
+}
