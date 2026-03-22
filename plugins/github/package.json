@@ -1,0 +1,42 @@
+{
+  "name": "@deshlo/plugin-github",
+  "version": "0.1.1",
+  "description": "GitHub browser plugin logic for Source Inspector",
+  "main": "build/src/index.js",
+  "module": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./build/src/index.d.ts",
+      "require": "./build/src/index.js",
+      "import": "./build/src/index.js"
+    }
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "clean": "rm -rf build",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "source-inspector",
+    "plugin",
+    "github"
+  ],
+  "author": "Nikos Gerontakis",
+  "license": "MIT",
+  "dependencies": {
+    "@babel/parser": "^7.28.4",
+    "@babel/traverse": "^7.29.0",
+    "@babel/types": "^7.28.4",
+    "@deshlo/core": "0.1.1",
+    "@octokit/core": "^7.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,7 +1,7 @@
 {
-  "name": "@fdb/core",
-  "version": "0.1.0",
-  "description": "Shared source inspector utilities and webpack loader injection",
+  "name": "@deshlo/core",
+  "version": "0.1.1",
+  "description": "Shared source inspector helper/wrapper utilities and contracts",
   "main": "build/src/index.js",
   "module": "build/src/index.js",
   "types": "build/src/index.d.ts",
@@ -12,11 +12,14 @@
       "require": "./build/src/index.js",
       "import": "./build/src/index.js"
     },
-    "./loader/jsx-source-loader.cjs": "./loader/jsx-source-loader.cjs"
+    "./overlay-plugin": {
+      "types": "./build/src/overlay-plugin.d.ts",
+      "require": "./build/src/overlay-plugin.js",
+      "import": "./build/src/overlay-plugin.js"
+    }
   },
   "files": [
-    "build",
-    "loader"
+    "build"
   ],
   "scripts": {
     "clean": "rm -rf build",
@@ -34,7 +37,8 @@
     "@babel/generator": "^7.28.3",
     "@babel/parser": "^7.28.4",
     "@babel/traverse": "^7.29.0",
-    "@babel/types": "^7.28.4"
+    "@babel/types": "^7.28.4",
+    "@deshlo/loader": "0.1.1"
   },
   "devDependencies": {
     "@types/node": "^24.10.1"

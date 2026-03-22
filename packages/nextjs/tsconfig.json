@@ -12,13 +12,16 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@couch-heroes/source-inspector-core": [
+      "@deshlo/core": [
         "../core/build/src/index.d.ts"
       ],
-      "@fdb/react": [
+      "@deshlo/react": [
         "../react/build/src/index.d.ts"
       ],
-      "@fdb/react/overlay": [
+      "@deshlo/react/webpack": [
+        "../react/build/src/webpack.d.ts"
+      ],
+      "@deshlo/react/overlay": [
         "../react/build/src/overlay.d.ts"
       ]
     },

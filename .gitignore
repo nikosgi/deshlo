@@ -1,5 +1,9 @@
 build
+dist
 node_modules
 *.tsbuildinfo
 .next
 .DS_Store
+.env
+.env.*
+!.env.example

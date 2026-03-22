@@ -1,7 +1,7 @@
 {
-  "name": "@fdb/react",
-  "version": "0.1.0",
-  "description": "React source inspector adapter and overlay",
+  "name": "@deshlo/react",
+  "version": "0.1.1",
+  "description": "React source inspector runtime and bundler adapters",
   "main": "build/src/index.js",
   "module": "build/src/index.js",
   "types": "build/src/index.d.ts",
@@ -11,6 +11,16 @@
       "types": "./build/src/index.d.ts",
       "require": "./build/src/index.js",
       "import": "./build/src/index.js"
+    },
+    "./webpack": {
+      "types": "./build/src/webpack.d.ts",
+      "require": "./build/src/webpack.js",
+      "import": "./build/src/webpack.js"
+    },
+    "./vite": {
+      "types": "./build/src/vite.d.ts",
+      "require": "./build/src/vite.js",
+      "import": "./build/src/vite.js"
     },
     "./overlay": {
       "types": "./build/src/overlay.d.ts",
@@ -24,7 +34,7 @@
   "scripts": {
     "clean": "rm -rf build",
     "build": "tsc -p tsconfig.json",
-    "test": "echo \"No tests yet\""
+    "test": "vitest run"
   },
   "keywords": [
     "react",
@@ -32,10 +42,10 @@
     "debug",
     "inspector"
   ],
-  "author": "Couch Heroes",
+  "author": "Nikos Gerontakis",
   "license": "MIT",
   "dependencies": {
-    "@couch-heroes/source-inspector-core": "0.1.0"
+    "@deshlo/core": "0.1.1"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -43,6 +53,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "@types/react": "^19.2.2"
+    "@types/react": "^19.2.2",
+    "vitest": "^3.2.4"
   }
 }

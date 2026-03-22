@@ -1,7 +1,15 @@
+export { withSourceInspectorWebpack } from "@deshlo/react/webpack";
+export type { SourceInspectorAdapterOptions, WebpackLikeConfig } from "@deshlo/core";
 export {
-  nextjsAdapter,
-  withNextjsSourceInspector,
-  withSourceInspector,
-} from "./adapters/nextjs";
-export type { NextJsLikeConfig } from "./adapters/nextjs";
-export type { SourceInspectorAdapterOptions } from "@couch-heroes/source-inspector-core";
+  applySourceInspectorTurbopack,
+  createSourceInspectorTurbopackRules,
+} from "./turbopack";
+export type {
+  LegacyTurboConfig,
+  NextJsLikeConfig,
+  NextTurbopackConfig,
+  NextjsTurbopackOptions,
+  TurbopackLoader,
+  TurbopackRule,
+  TurbopackRules,
+} from "./turbopack";

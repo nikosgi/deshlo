@@ -1,10 +1,18 @@
-import { existsSync } from "node:fs";
 import path from "node:path";
 
 export interface SourceInspectorAdapterOptions {
   enabled?: boolean;
   include?: string[];
   attributeName?: string;
+  wrapLooseTextNodes?: boolean;
+  annotateLeafNodesOnly?: boolean;
+}
+
+export interface SourceInspectorLoaderOptions {
+  attributeName: string;
+  wrapLooseTextNodes: boolean;
+  annotateLeafNodesOnly: boolean;
+  includePaths: string[];
 }
 
 export interface WebpackLikeConfig {
@@ -20,31 +28,30 @@ export interface SourceInspectorAdapter<TConfig = unknown> {
 }
 
 export const DEFAULT_ATTRIBUTE_NAME = "data-src-loc";
+export const DEFAULT_REVISION_ATTRIBUTE_NAME = "data-src-rev";
 
-function resolveLoaderPath(): string {
-  const candidates = [
-    // Built package layout: build/src/shared.js -> loader/jsx-source-loader.cjs
-    path.resolve(__dirname, "../../loader/jsx-source-loader.cjs"),
-    // Source layout (workspace development): src/shared.ts -> loader/jsx-source-loader.cjs
-    path.resolve(__dirname, "../loader/jsx-source-loader.cjs"),
-    // Consumer fallback when running directly from another cwd.
-    path.resolve(
-      process.cwd(),
-      "node_modules/@couch-heroes/source-inspector-core/loader/jsx-source-loader.cjs"
-    ),
-  ];
-
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return candidates[0];
+export function buildSourceInspectorLoaderOptions(
+  options: SourceInspectorAdapterOptions = {},
+  cwd: string = process.cwd()
+): SourceInspectorLoaderOptions {
+  return {
+    attributeName: options.attributeName ?? DEFAULT_ATTRIBUTE_NAME,
+    wrapLooseTextNodes: options.wrapLooseTextNodes === true,
+    annotateLeafNodesOnly: options.annotateLeafNodesOnly === true,
+    includePaths: resolveIncludePaths(options.include, cwd),
+  };
 }
 
 export function isSourceInspectorEnabled(options: SourceInspectorAdapterOptions): boolean {
-  return options.enabled ?? process.env.NEXT_PUBLIC_SOURCE_INSPECTOR === "1";
+  if (typeof options.enabled === "boolean") {
+    return options.enabled;
+  }
+
+  return (
+    process.env.NEXT_PUBLIC_SOURCE_INSPECTOR === "1" ||
+    process.env.VITE_SOURCE_INSPECTOR === "1" ||
+    process.env.SOURCE_INSPECTOR === "1"
+  );
 }
 
 export function resolveIncludePaths(
@@ -60,23 +67,20 @@ export function injectSourceInspectorLoader<TConfig extends WebpackLikeConfig>(
   options: SourceInspectorAdapterOptions = {},
   cwd: string = process.cwd()
 ): TConfig {
-  const include = resolveIncludePaths(options.include, cwd);
-  const attributeName = options.attributeName ?? DEFAULT_ATTRIBUTE_NAME;
+  const loaderOptions = buildSourceInspectorLoaderOptions(options, cwd);
 
   webpackConfig.module ??= {};
   webpackConfig.module.rules ??= [];
 
   webpackConfig.module.rules.unshift({
     test: /\.[jt]sx?$/,
-    include,
+    include: loaderOptions.includePaths,
     exclude: /node_modules/,
     enforce: "pre",
     use: [
       {
-        loader: resolveLoaderPath(),
-        options: {
-          attributeName,
-        },
+        loader: "@deshlo/loader",
+        options: loaderOptions,
       },
     ],
   });

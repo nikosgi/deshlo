@@ -1,17 +1,18 @@
 import Link from "next/link";
+import MockComponent from "../../components/test";
 
 export default function AboutPage() {
   return (
     <main className="container">
 
-
-
-
+      test
+      <MockComponent/>
       <h1>
        
        
        
-       
+        About Test Page        <b>About Test Page</b>
+
         About Test Page
       </h1>
       <p>This page exists to validate multi-page behavior.</p>
@@ -26,6 +27,8 @@ export default function AboutPage() {
       <p>
         <Link href="/">Back to Home</Link>
       </p>
+
+      test3
     </main>
   );
 }

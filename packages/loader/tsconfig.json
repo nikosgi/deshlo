@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": [
+      "es2020"
+    ],
+    "types": [
+      "node"
+    ],
+    "rootDir": "./src",
+    "outDir": "./.build",
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    ".build",
+    "node_modules"
+  ]
+}

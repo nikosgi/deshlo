@@ -3,14 +3,17 @@
   "private": true,
   "workspaces": [
     "packages/*",
+    "plugins/*",
     "apps/*"
   ],
   "scripts": {
-    "clean": "yarn workspace @fdb/nextjs clean && yarn workspace @fdb/react clean && yarn workspace @fdb/vue clean && yarn workspace @couch-heroes/source-inspector-core clean",
-    "build": "yarn workspace @couch-heroes/source-inspector-core build && yarn workspace @fdb/react build && yarn workspace @fdb/vue build && yarn workspace @fdb/nextjs build",
-    "test": "yarn workspace @couch-heroes/source-inspector-core test && yarn workspace @fdb/react test && yarn workspace @fdb/vue test && yarn workspace @fdb/nextjs test",
-    "dev:test-app": "yarn workspace @fdb/next-test-app dev",
-    "build:test-app": "yarn workspace @fdb/next-test-app build"
+    "clean": "yarn workspace @deshlo/nextjs clean && yarn workspace @deshlo/react clean && yarn workspace @deshlo/react-github clean && yarn workspace @deshlo/plugin-github clean && yarn workspace @deshlo/plugin-azure clean && yarn workspace @deshlo/core clean && yarn workspace @deshlo/loader clean",
+    "build": "yarn workspace @deshlo/loader build && yarn workspace @deshlo/core build && yarn workspace @deshlo/plugin-github build && yarn workspace @deshlo/plugin-azure build && yarn workspace @deshlo/react build && yarn workspace @deshlo/react-github build && yarn workspace @deshlo/nextjs build",
+    "test": "yarn workspace @deshlo/loader test && yarn workspace @deshlo/core test && yarn workspace @deshlo/plugin-github test && yarn workspace @deshlo/plugin-azure test && yarn workspace @deshlo/react test && yarn workspace @deshlo/react-github test && yarn workspace @deshlo/nextjs test",
+    "dev:test-app": "yarn workspace @deshlo/next-test-app dev",
+    "build:test-app": "yarn workspace @deshlo/next-test-app build",
+    "dev:react-sample": "yarn workspace @deshlo/react-sample-app dev",
+    "build:react-sample": "yarn workspace @deshlo/react-sample-app build"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

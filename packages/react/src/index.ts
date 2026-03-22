@@ -1,8 +1,17 @@
-export { SourceInspectorOverlay } from "./SourceInspectorOverlay";
-export type { SourceInspectorOverlayProps, TriggerKey } from "./SourceInspectorOverlay";
-export { reactAdapter, withReactSourceInspector } from "./adapters/react";
+export { default as OverlayGate } from "./overlay/OverlayGate";
+export type { OverlayGateProps } from "./overlay/OverlayGate";
+export {
+  OverlayPluginProvider,
+  useOverlayPlugin,
+  type OverlayPluginProviderProps,
+} from "./overlay/overlay-plugin-provider";
 export type {
-  SourceInspectorAdapter,
-  SourceInspectorAdapterOptions,
-  WebpackLikeConfig,
-} from "@couch-heroes/source-inspector-core";
+  OverlayPlugin,
+  OverlayPluginContext,
+  OverlayResultLink,
+  OverlaySelection,
+  OverlaySubmitHandler,
+  OverlaySubmitInput,
+  OverlaySubmitResult,
+  TriggerKey,
+} from "./overlay/overlay-plugin";

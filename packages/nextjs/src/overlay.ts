@@ -1,5 +1,5 @@
 export {
-  SourceInspectorOverlay,
-  type SourceInspectorOverlayProps,
+  OverlayGate,
+  type OverlayGateProps,
   type TriggerKey,
-} from "@fdb/react/overlay";
+} from "@deshlo/react/overlay";

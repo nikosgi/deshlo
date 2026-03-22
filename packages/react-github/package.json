@@ -1,0 +1,44 @@
+{
+  "name": "@deshlo/react-github",
+  "version": "0.1.1",
+  "description": "React wrapper for Source Inspector GitHub plugin",
+  "main": "build/src/index.js",
+  "module": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./build/src/index.d.ts",
+      "require": "./build/src/index.js",
+      "import": "./build/src/index.js"
+    }
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "clean": "rm -rf build",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "react",
+    "source-inspector",
+    "github",
+    "plugin"
+  ],
+  "author": "Nikos Gerontakis",
+  "license": "MIT",
+  "dependencies": {
+    "@deshlo/plugin-github": "0.1.1",
+    "@deshlo/react": "0.1.1"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2",
+    "vitest": "^3.2.4"
+  }
+}

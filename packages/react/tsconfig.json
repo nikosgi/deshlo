@@ -12,8 +12,11 @@
     ],
     "baseUrl": ".",
     "paths": {
-      "@couch-heroes/source-inspector-core": [
+      "@deshlo/core": [
         "../core/build/src/index.d.ts"
+      ],
+      "@deshlo/core/overlay-plugin": [
+        "../core/build/src/overlay-plugin.d.ts"
       ]
     },
     "outDir": "./build/src",

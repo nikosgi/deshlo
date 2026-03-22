@@ -1,7 +1,7 @@
 {
-  "name": "@fdb/nextjs",
-  "version": "0.1.0",
-  "description": "Next.js source inspector adapter",
+  "name": "@deshlo/nextjs",
+  "version": "0.1.1",
+  "description": "Next.js source inspector bundler utilities",
   "main": "build/src/index.js",
   "module": "build/src/index.js",
   "types": "build/src/index.d.ts",
@@ -24,7 +24,7 @@
   "scripts": {
     "clean": "rm -rf build",
     "build": "tsc -p tsconfig.json",
-    "test": "echo \"No tests yet\""
+    "test": "vitest run"
   },
   "keywords": [
     "nextjs",
@@ -32,11 +32,11 @@
     "debug",
     "inspector"
   ],
-  "author": "Couch Heroes",
+  "author": "Nikos Gerontakis",
   "license": "MIT",
   "dependencies": {
-    "@couch-heroes/source-inspector-core": "0.1.0",
-    "@fdb/react": "0.1.0"
+    "@deshlo/core": "0.1.1",
+    "@deshlo/react": "0.1.1"
   },
   "peerDependencies": {
     "next": ">=14",
@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "@types/react": "^19.2.2"
+    "@types/react": "^19.2.2",
+    "vitest": "^3.2.4"
   }
 }

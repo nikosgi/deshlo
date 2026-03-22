@@ -1,0 +1,30 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "es2020"
+    ],
+    "types": [
+      "node"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@deshlo/core": [
+        "../../packages/core/build/src/index.d.ts"
+      ],
+      "@deshlo/core/overlay-plugin": [
+        "../../packages/core/build/src/overlay-plugin.d.ts"
+      ]
+    },
+    "outDir": "./build/src",
+    "rootDir": "./src"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "build",
+    "node_modules"
+  ]
+}
