@@ -6,7 +6,7 @@ export default function HomePage() {
       <h1>Source Inspector Test App</h1>
       <p>
         Hold <strong>Alt</strong> and click any element when
-        <code>NEXT_PUBLIC_SOURCE_INSPECTOR=1</code>.
+        <code>NEXT_PUBLIC_SOURCE_INSPECTOR=10</code>.
       </p>
 
       <section className="card-row">
