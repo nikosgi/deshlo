@@ -22,8 +22,10 @@ export type { InjectSourceAttributesOptions, InjectSourceAttributesResult } from
 export type {
   OverlayPlugin,
   OverlayPluginContext,
+  OverlayProposedChange,
   OverlayResultLink,
   OverlaySelection,
+  OverlayListProposedChangesHandler,
   OverlaySubmitHandler,
   OverlaySubmitInput,
   OverlaySubmitResult,

@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import type { NextConfig } from "next";
 
 import {
   buildSourceInspectorLoaderOptions,
@@ -7,41 +8,27 @@ import {
   type SourceInspectorAdapterOptions,
 } from "@deshlo/core";
 
-export interface NextJsLikeConfig {
-  webpack?: (config: any, context: any) => any;
-  turbopack?: NextTurbopackConfig;
-  experimental?: {
-    turbo?: LegacyTurboConfig;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-}
-
 export interface NextjsTurbopackOptions extends SourceInspectorAdapterOptions {
   cwd?: string;
 }
 
-export type TurbopackLoader = string | { loader: string; options?: unknown };
-
-export interface TurbopackRule {
-  loaders: TurbopackLoader[];
-  as?: string;
-  condition?: unknown;
-}
-
-export type TurbopackRules = Record<string, TurbopackRule | TurbopackRule[]>;
-
-export interface NextTurbopackConfig {
-  root?: string;
-  rules?: TurbopackRules;
-  [key: string]: unknown;
-}
+export type NextTurbopackConfig = NonNullable<NextConfig["turbopack"]>;
+export type TurbopackRules = NonNullable<NextTurbopackConfig["rules"]>;
+export type TurbopackRuleConfigCollection = TurbopackRules[string];
+export type TurbopackRuleCollectionItem = Extract<TurbopackRuleConfigCollection, unknown[]>[number];
+export type TurbopackRule = Extract<TurbopackRuleConfigCollection, { loaders: unknown[] }>;
+export type TurbopackLoader = TurbopackRule["loaders"][number];
+type TurbopackObjectLoader = Extract<TurbopackLoader, { loader: string }>;
 
 export interface LegacyTurboConfig {
   root?: string;
   rules?: TurbopackRules;
   loaders?: Record<string, TurbopackLoader[]>;
-  [key: string]: unknown;
+  [key: string]: any;
+}
+
+export interface NextJsLikeConfig extends NextConfig {
+  experimental?: (NextConfig["experimental"] & { turbo?: LegacyTurboConfig }) | undefined;
 }
 
 const TURBOPACK_EXTENSIONS = [".js", ".jsx", ".ts", ".tsx"] as const;
@@ -58,15 +45,24 @@ function toPosixPath(value: string): string {
   return value.replace(/\\/g, "/");
 }
 
-function toTurbopackGlob(includePath: string, rootDir: string, extension: string): string {
+function escapeForRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function toTurbopackPathCondition(includePath: string, rootDir: string): RegExp {
   const relativePath = toPosixPath(path.relative(rootDir, includePath)).replace(/^\.\/+/, "");
-  if (relativePath.length === 0 || relativePath === ".") {
-    return `*${extension}`;
+  const extensionsPattern = TURBOPACK_EXTENSIONS.map((extension) => extension.slice(1))
+    .map(escapeForRegex)
+    .join("|");
+
+  if (relativePath.length === 0 || relativePath === "." || relativePath.startsWith("../")) {
+    return new RegExp(`\\.(?:${extensionsPattern})$`);
   }
-  if (relativePath.startsWith("../")) {
-    return `**/*${extension}`;
-  }
-  return `${relativePath}/**/*${extension}`;
+
+  const normalizedRelativePath = escapeForRegex(relativePath.replace(/\/+$/, ""));
+  return new RegExp(
+    `(?:^|\\[project\\]/)${normalizedRelativePath}(?:/.*)?\\.(?:${extensionsPattern})$`
+  );
 }
 
 function findWorkspaceRoot(cwd: string): string {
@@ -106,17 +102,32 @@ function resolveTurbopackRoot(nextConfig: NextJsLikeConfig, cwd: string): string
   return configuredRoot ?? findWorkspaceRoot(cwd);
 }
 
+function isTurbopackRule(entry: TurbopackRuleCollectionItem): entry is TurbopackRule {
+  return typeof entry === "object" && entry !== null && "loaders" in entry;
+}
+
+function toTurbopackLoaderOptions(
+  options: ReturnType<typeof buildSourceInspectorLoaderOptions>
+): TurbopackObjectLoader["options"] {
+  return {
+    attributeName: options.attributeName,
+    wrapLooseTextNodes: options.wrapLooseTextNodes,
+    annotateLeafNodesOnly: options.annotateLeafNodesOnly,
+    includePaths: options.includePaths,
+  };
+}
+
 function mergeRuleEntry(
-  existing: TurbopackRule | TurbopackRule[] | undefined,
-  incoming: TurbopackRule
-): TurbopackRule | TurbopackRule[] {
+  existing: TurbopackRuleConfigCollection | undefined,
+  incoming: TurbopackRuleCollectionItem
+): TurbopackRuleConfigCollection {
   if (!existing) {
-    return incoming;
+    return isTurbopackRule(incoming) ? incoming : [incoming];
   }
   if (Array.isArray(existing)) {
-    return [...existing, incoming];
+    return [...existing, incoming] as TurbopackRuleConfigCollection;
   }
-  return [existing, incoming];
+  return [existing, incoming] as TurbopackRuleConfigCollection;
 }
 
 function mergeRules(
@@ -142,9 +153,9 @@ function mergeRules(
 
 function createLegacyTurboLoaders(options: NextjsTurbopackOptions, cwd: string) {
   const loaderOptions = buildSourceInspectorLoaderOptions(options, cwd);
-  const loader = {
+  const loader: TurbopackObjectLoader = {
     loader: SOURCE_INSPECTOR_LOADER,
-    options: loaderOptions,
+    options: toTurbopackLoaderOptions(loaderOptions),
   };
 
   return TURBOPACK_EXTENSIONS.reduce<Record<string, TurbopackLoader[]>>((acc, extension) => {
@@ -163,25 +174,26 @@ export function createSourceInspectorTurbopackRules(
   }
 
   const loaderOptions = buildSourceInspectorLoaderOptions(options, cwd);
-  const loader = {
+  const loader: TurbopackObjectLoader = {
     loader: SOURCE_INSPECTOR_LOADER,
-    options: loaderOptions,
+    options: toTurbopackLoaderOptions(loaderOptions),
   };
 
-  const rules: TurbopackRules = {};
-  for (const includePath of loaderOptions.includePaths) {
-    for (const extension of TURBOPACK_EXTENSIONS) {
-      const glob = toTurbopackGlob(includePath, rootDir, extension);
-      const incomingRule: TurbopackRule = {
-        condition: { not: "foreign" },
-        loaders: [loader],
-        as: "*.js",
-      };
-      rules[glob] = mergeRuleEntry(rules[glob], incomingRule);
-    }
-  }
+  const includePathConditions = loaderOptions.includePaths.map((includePath) => ({
+    path: toTurbopackPathCondition(includePath, rootDir),
+  }));
 
-  return rules;
+  const includeCondition =
+    includePathConditions.length === 1 ? includePathConditions[0] : { any: includePathConditions };
+
+  const rule: TurbopackRule = {
+    condition: { all: [{ not: "foreign" }, includeCondition] },
+    loaders: [loader],
+  };
+
+  return {
+    "*": rule,
+  };
 }
 
 export function applySourceInspectorTurbopack<TConfig extends NextJsLikeConfig>(

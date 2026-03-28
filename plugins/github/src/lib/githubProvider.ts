@@ -13,11 +13,20 @@ export interface PullRequestResponse {
   prUrl: string;
 }
 
+export interface OpenPullRequestResponse extends PullRequestResponse {
+  draft: boolean;
+  baseBranch: string;
+  headBranch: string;
+  body: string;
+}
+
 export interface RepoProvider {
   listBranches(): Promise<string[]>;
+  listOpenPullRequests(): Promise<OpenPullRequestResponse[]>;
   getBranchHeadSha(branch: string): Promise<string>;
   getFileContent(path: string, ref: string): Promise<FileContentResponse>;
   createBranch(branch: string, baseSha: string): Promise<void>;
+  updatePullRequestBody(prNumber: number, body: string): Promise<void>;
   updateFile(params: {
     path: string;
     branch: string;
@@ -111,6 +120,37 @@ export function createGitHubProvider(
       }
     },
 
+    async listOpenPullRequests() {
+      try {
+        const response = await octokit.request("GET /repos/{owner}/{repo}/pulls", {
+          owner: config.owner,
+          repo: config.repo,
+          state: "open",
+          per_page: 100,
+        });
+
+        return response.data.map(
+          (pr: {
+            number: number;
+            html_url: string;
+            draft?: boolean;
+            body?: string | null;
+            base: { ref: string };
+            head: { ref: string };
+          }) => ({
+            prNumber: pr.number,
+            prUrl: pr.html_url,
+            draft: Boolean(pr.draft),
+            baseBranch: pr.base.ref,
+            headBranch: pr.head.ref,
+            body: pr.body || "",
+          })
+        );
+      } catch (error) {
+        toProviderError(error);
+      }
+    },
+
     async getBranchHeadSha(branch: string) {
       try {
         const response = await octokit.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
@@ -193,6 +233,19 @@ export function createGitHubProvider(
           );
         }
 
+        toProviderError(error);
+      }
+    },
+
+    async updatePullRequestBody(prNumber: number, body: string) {
+      try {
+        await octokit.request("PATCH /repos/{owner}/{repo}/pulls/{pull_number}", {
+          owner: config.owner,
+          repo: config.repo,
+          pull_number: prNumber,
+          body,
+        });
+      } catch (error) {
         toProviderError(error);
       }
     },

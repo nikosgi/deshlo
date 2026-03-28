@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import { GitHubBrowserPluginConfig, GithubPlugin } from "@deshlo/react-github";
-import { OverlayGate } from "@deshlo/react/overlay";
+import { 
+  type GitHubBrowserPluginConfig, 
+  GithubPlugin,
+  OverlayGate 
+} from "deshlo";
 
 import "./globals.css";
 

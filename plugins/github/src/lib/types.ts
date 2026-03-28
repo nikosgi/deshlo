@@ -35,6 +35,7 @@ export interface PreviewChangeSuccess {
 }
 
 export interface CreateDraftPrSuccess {
+  action: "created" | "updated";
   branchName: string;
   commitSha: string;
   prNumber: number;

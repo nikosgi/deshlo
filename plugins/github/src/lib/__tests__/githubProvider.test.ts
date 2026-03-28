@@ -45,6 +45,41 @@ describe("createGitHubProvider", () => {
     expect(request).toHaveBeenCalledTimes(3);
   });
 
+  it("lists open PRs and updates PR body", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: [
+          {
+            number: 9,
+            html_url: "https://example.com/pr/9",
+            draft: true,
+            body: "test",
+            base: { ref: "main" },
+            head: { ref: "branch-1" },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({});
+
+    const provider = createGitHubProvider(REPO_CONFIG, "token", { request } as any);
+
+    const openPrs = await provider.listOpenPullRequests();
+    await provider.updatePullRequestBody(9, "updated");
+
+    expect(openPrs).toEqual([
+      {
+        prNumber: 9,
+        prUrl: "https://example.com/pr/9",
+        draft: true,
+        baseBranch: "main",
+        headBranch: "branch-1",
+        body: "test",
+      },
+    ]);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   it("maps missing base branch to BASE_BRANCH_NOT_FOUND", async () => {
     const request = vi.fn().mockRejectedValue({ status: 404 });
     const provider = createGitHubProvider(REPO_CONFIG, "token", { request } as any);

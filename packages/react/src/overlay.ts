@@ -10,8 +10,10 @@ export {
 export type {
   OverlayPlugin,
   OverlayPluginContext,
+  OverlayProposedChange,
   OverlayResultLink,
   OverlaySelection,
+  OverlayListProposedChangesHandler,
   OverlaySubmitHandler,
   OverlaySubmitInput,
   OverlaySubmitResult,

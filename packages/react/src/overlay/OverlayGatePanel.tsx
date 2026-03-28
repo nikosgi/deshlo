@@ -11,13 +11,20 @@ export default function OverlayGatePanel({ width = 420 }: OverlayGatePanelProps)
     inspectorEnabled,
     triggerKey,
     pluginId,
+    currentRevision,
     selection,
     selectionWarning,
     proposedText,
     submitting,
     result,
+    changes,
+    changesLoading,
+    changesError,
+    changesTab,
     setProposedText,
     submit,
+    refreshChanges,
+    setChangesTab,
   } = useSourceInspectorContext();
 
   if (!inspectorEnabled) {
@@ -25,6 +32,10 @@ export default function OverlayGatePanel({ width = 420 }: OverlayGatePanelProps)
   }
 
   const canSubmit = Boolean(selection && proposedText.trim() && !submitting);
+  const visibleChanges =
+    changesTab === "all"
+      ? changes
+      : changes.filter((change) => change.baseCommitSha === currentRevision);
 
   return (
     <div
@@ -120,6 +131,102 @@ export default function OverlayGatePanel({ width = 420 }: OverlayGatePanelProps)
         >
           {submitting ? "Submitting..." : "Submit changes"}
         </button>
+      </div>
+
+      <div style={{ borderTop: "1px solid #334155", paddingTop: 8, marginBottom: 10 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>Proposed Changes</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          <button
+            onClick={() => {
+              setChangesTab("current");
+            }}
+            style={{
+              padding: "4px 8px",
+              borderRadius: 6,
+              border: "1px solid #334155",
+              background: changesTab === "current" ? "#1e293b" : "transparent",
+              color: "#f8fafc",
+              cursor: "pointer",
+            }}
+          >
+            Current Revision
+          </button>
+          <button
+            onClick={() => {
+              setChangesTab("all");
+            }}
+            style={{
+              padding: "4px 8px",
+              borderRadius: 6,
+              border: "1px solid #334155",
+              background: changesTab === "all" ? "#1e293b" : "transparent",
+              color: "#f8fafc",
+              cursor: "pointer",
+            }}
+          >
+            All Open
+          </button>
+          <button
+            onClick={() => {
+              void refreshChanges();
+            }}
+            style={{
+              marginLeft: "auto",
+              padding: "4px 8px",
+              borderRadius: 6,
+              border: "1px solid #334155",
+              background: "transparent",
+              color: "#f8fafc",
+              cursor: "pointer",
+            }}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {changesLoading ? <div style={{ opacity: 0.85 }}>Loading proposed changes...</div> : null}
+        {changesError ? <div style={{ color: "#fca5a5" }}>{changesError}</div> : null}
+
+        {!changesLoading && !changesError ? (
+          visibleChanges.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {visibleChanges.map((change) => (
+                <div
+                  key={`${change.prNumber}-${change.changeId}`}
+                  style={{
+                    border: "1px solid #334155",
+                    borderRadius: 8,
+                    padding: 8,
+                    background: "rgba(15, 23, 42, 0.5)",
+                  }}
+                >
+                  <div>
+                    <strong>{change.tagName}</strong> at <code>{change.sourceLoc}</code>
+                  </div>
+                  <div>
+                    Proposed: <code>{change.proposedText}</code>
+                  </div>
+                  <div>
+                    PR:{" "}
+                    <a
+                      href={change.prUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "#93c5fd" }}
+                    >
+                      #{change.prNumber}
+                    </a>
+                  </div>
+                  <div style={{ opacity: 0.8 }}>
+                    Updated: <code>{change.updatedAt}</code>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ opacity: 0.85 }}>No proposed changes found.</div>
+          )
+        ) : null}
       </div>
 
       {result ? (

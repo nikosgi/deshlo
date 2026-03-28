@@ -6,6 +6,10 @@ import { applySourceInspectorTurbopack } from "./turbopack";
 
 const CWD = "/repo";
 
+function hasLoaders(entry: unknown): entry is { loaders: unknown[] } {
+  return typeof entry === "object" && entry !== null && "loaders" in entry;
+}
+
 describe("applySourceInspectorTurbopack", () => {
   it("creates turbopack rules when config has no turbopack section", () => {
     const result = applySourceInspectorTurbopack(
@@ -22,28 +26,28 @@ describe("applySourceInspectorTurbopack", () => {
     );
 
     expect(result.turbopack?.rules).toBeDefined();
-    expect(Object.keys(result.turbopack?.rules ?? {})).toEqual(
-      expect.arrayContaining([
-        "app/**/*.js",
-        "app/**/*.jsx",
-        "app/**/*.ts",
-        "app/**/*.tsx",
-        "components/**/*.js",
-        "components/**/*.jsx",
-        "components/**/*.ts",
-        "components/**/*.tsx",
-      ])
-    );
+    expect(Object.keys(result.turbopack?.rules ?? {})).toEqual(expect.arrayContaining(["*"]));
 
-    const appRule = result.turbopack?.rules?.["app/**/*.tsx"];
-    const firstRule = Array.isArray(appRule) ? appRule[0] : appRule;
+    const wildcardRule = result.turbopack?.rules?.["*"];
+    const firstRule = Array.isArray(wildcardRule)
+      ? wildcardRule.find((entry) => hasLoaders(entry))
+      : wildcardRule;
     const firstLoader =
-      firstRule && firstRule.loaders.length > 0 ? firstRule.loaders[0] : undefined;
+      hasLoaders(firstRule) && firstRule.loaders.length > 0 ? firstRule.loaders[0] : undefined;
+    const condition = firstRule && typeof firstRule === "object" ? firstRule.condition : undefined;
+    const allConditions =
+      condition &&
+      typeof condition === "object" &&
+      "all" in condition &&
+      Array.isArray(condition.all)
+        ? condition.all
+        : [];
 
-    expect(firstRule).toMatchObject({
-      as: "*.js",
-      condition: { not: "foreign" },
-    });
+    const includeConditionEntry = allConditions.find(
+      (entry) => typeof entry === "object" && entry !== null && "any" in entry
+    ) as { any: { path: RegExp }[] } | undefined;
+
+    expect(firstRule).toBeDefined();
     expect(firstLoader).toMatchObject({
       loader: "@deshlo/loader",
       options: {
@@ -53,6 +57,10 @@ describe("applySourceInspectorTurbopack", () => {
         includePaths: [path.resolve(CWD, "app"), path.resolve(CWD, "components")],
       },
     });
+    expect(allConditions).toEqual(expect.arrayContaining([{ not: "foreign" }]));
+    expect(includeConditionEntry?.any.length).toBe(2);
+    expect(includeConditionEntry?.any[0]?.path).toBeInstanceOf(RegExp);
+    expect(includeConditionEntry?.any[1]?.path).toBeInstanceOf(RegExp);
     expect(result.turbopack?.root).toBe(CWD);
   });
 
@@ -77,7 +85,7 @@ describe("applySourceInspectorTurbopack", () => {
 
     const rules = result.turbopack?.rules as Record<string, unknown> | undefined;
     expect(rules?.["*.mdx"]).toBeDefined();
-    expect(rules?.["app/**/*.tsx"]).toBeDefined();
+    expect(rules?.["*"]).toBeDefined();
   });
 
   it("merges into legacy experimental turbo config", () => {
@@ -141,6 +149,21 @@ describe("applySourceInspectorTurbopack", () => {
     );
 
     expect(result.turbopack?.root).toBe(workspaceRoot);
-    expect(result.turbopack?.rules?.["apps/next-test-app/app/**/*.tsx"]).toBeDefined();
+    const rule = result.turbopack?.rules?.["*"];
+    const firstRule = Array.isArray(rule) ? rule.find((entry) => hasLoaders(entry)) : rule;
+    const condition = firstRule && typeof firstRule === "object" ? firstRule.condition : undefined;
+    const allConditions =
+      condition &&
+      typeof condition === "object" &&
+      "all" in condition &&
+      Array.isArray(condition.all)
+        ? condition.all
+        : [];
+    const includeConditionEntry = allConditions.find(
+      (entry) => typeof entry === "object" && entry !== null && "path" in entry
+    ) as { path: RegExp } | undefined;
+
+    expect(includeConditionEntry?.path).toBeInstanceOf(RegExp);
+    expect(includeConditionEntry?.path.source).toMatch(/apps\\\/next-test-app\\\/app/);
   });
 });

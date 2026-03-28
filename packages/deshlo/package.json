@@ -1,0 +1,44 @@
+{
+  "name": "deshlo",
+  "version": "0.1.1",
+  "description": "Deshlo React runtime with default GitHub plugin integration",
+  "main": "build/src/index.js",
+  "module": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./build/src/index.d.ts",
+      "require": "./build/src/index.js",
+      "import": "./build/src/index.js"
+    }
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "clean": "rm -rf build",
+    "build": "tsc -p tsconfig.json",
+    "test": "echo \"No tests in deshlo\""
+  },
+  "keywords": [
+    "react",
+    "source-inspector",
+    "github",
+    "overlay"
+  ],
+  "author": "Nikos Gerontakis",
+  "license": "MIT",
+  "dependencies": {
+    "@deshlo/react": "0.1.1",
+    "@deshlo/react-github": "0.1.1"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2"
+  }
+}

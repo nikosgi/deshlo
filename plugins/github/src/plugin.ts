@@ -9,6 +9,7 @@ import { SourceInspectorError } from "./lib/errors";
 import {
   createDraftPrFromProposedChange,
   getBranches,
+  listProposedChanges,
   type SourceInspectorRuntimeOptions,
 } from "./lib/workflow";
 
@@ -100,9 +101,11 @@ export function createGitHubBrowserPlugin(
           }
         );
 
+        const actionLabel = result.action === "updated" ? "updated" : "created";
+
         return {
           ok: true,
-          message: `Draft PR #${result.prNumber} created on branch ${result.branchName}.`,
+          message: `Draft PR #${result.prNumber} ${actionLabel} on branch ${result.branchName}.`,
           links: [
             {
               label: `Open PR #${result.prNumber}`,
@@ -113,6 +116,22 @@ export function createGitHubBrowserPlugin(
       } catch (error) {
         return toErrorResult(error);
       }
+    },
+    async listProposedChanges(context: OverlayPluginContext) {
+      const token = resolveToken(config);
+      if (!token) {
+        return [];
+      }
+
+      const runtime = {
+        ...config,
+        host: resolveHost(context, config),
+      };
+
+      return listProposedChanges({
+        token,
+        runtime,
+      });
     },
   };
 }
