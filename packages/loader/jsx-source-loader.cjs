@@ -290,8 +290,8 @@ function normalizeOptions(options) {
     attributeName: typeof options.attributeName === "string" && options.attributeName.trim().length > 0 ? options.attributeName.trim() : DEFAULT_ATTRIBUTE_NAME,
     revisionAttributeName: DEFAULT_REVISION_ATTRIBUTE_NAME,
     revisionValue: resolveBuildCommitSha(),
-    wrapLooseTextNodes: options.wrapLooseTextNodes === true,
-    annotateLeafNodesOnly: options.annotateLeafNodesOnly === true
+    wrapLooseTextNodes: true,
+    annotateLeafNodesOnly: true
   };
 }
 function jsxSourceLoader(source, inputSourceMap) {

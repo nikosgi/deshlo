@@ -7,9 +7,9 @@
     "apps/*"
   ],
   "scripts": {
-    "clean": "yarn workspace @deshlo/nextjs clean && yarn workspace @deshlo/react clean && yarn workspace @deshlo/react-github clean && yarn workspace @deshlo/plugin-github clean && yarn workspace @deshlo/plugin-azure clean && yarn workspace @deshlo/core clean && yarn workspace @deshlo/loader clean",
-    "build": "yarn workspace @deshlo/loader build && yarn workspace @deshlo/core build && yarn workspace @deshlo/plugin-github build && yarn workspace @deshlo/plugin-azure build && yarn workspace @deshlo/react build && yarn workspace @deshlo/react-github build && yarn workspace @deshlo/nextjs build",
-    "test": "yarn workspace @deshlo/loader test && yarn workspace @deshlo/core test && yarn workspace @deshlo/plugin-github test && yarn workspace @deshlo/plugin-azure test && yarn workspace @deshlo/react test && yarn workspace @deshlo/react-github test && yarn workspace @deshlo/nextjs test",
+    "clean": "yarn workspace @deshlo/nextjs clean && yarn workspace @deshlo/react clean && yarn workspace @deshlo/react-github clean && yarn workspace deshlo clean && yarn workspace @deshlo/plugin-github clean && yarn workspace @deshlo/plugin-azure clean && yarn workspace @deshlo/core clean && yarn workspace @deshlo/loader clean",
+    "build": "yarn workspace @deshlo/loader build && yarn workspace @deshlo/core build && yarn workspace @deshlo/plugin-github build && yarn workspace @deshlo/plugin-azure build && yarn workspace @deshlo/react build && yarn workspace @deshlo/react-github build && yarn workspace deshlo build && yarn workspace @deshlo/nextjs build",
+    "test": "yarn workspace @deshlo/loader test && yarn workspace @deshlo/core test && yarn workspace @deshlo/plugin-github test && yarn workspace @deshlo/plugin-azure test && yarn workspace @deshlo/react test && yarn workspace @deshlo/react-github test && yarn workspace deshlo test && yarn workspace @deshlo/nextjs test",
     "dev:test-app": "yarn workspace @deshlo/next-test-app dev",
     "build:test-app": "yarn workspace @deshlo/next-test-app build",
     "dev:react-sample": "yarn workspace @deshlo/react-sample-app dev",

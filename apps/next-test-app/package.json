@@ -5,22 +5,21 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "dev:webpack": "next dev --webpack",
-    "build:webpack": "next build --webpack",
+    "dev:webpack": "next dev",
+    "build:webpack": "next build",
     "dev:turbopack": "next dev",
     "build:turbopack": "next build",
     "start": "next start",
     "test": "echo \"No tests in @deshlo/next-test-app\""
   },
   "dependencies": {
-    "@deshlo/nextjs": "0.1.1",
-    "@deshlo/react": "0.1.1",
-    "@deshlo/react-github": "0.1.1",
+    "deshlo": "0.1.1",
     "next": "^16.1.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@deshlo/loader": "0.1.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",

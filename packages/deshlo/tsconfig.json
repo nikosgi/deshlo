@@ -1,0 +1,33 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "es2020"
+    ],
+    "jsx": "react-jsx",
+    "types": [
+      "node",
+      "react"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@deshlo/react/overlay": [
+        "../react/build/src/overlay.d.ts"
+      ],
+      "@deshlo/react-github": [
+        "../react-github/build/src/index.d.ts"
+      ]
+    },
+    "outDir": "./build/src",
+    "rootDir": "./src"
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx"
+  ],
+  "exclude": [
+    "build",
+    "node_modules"
+  ]
+}

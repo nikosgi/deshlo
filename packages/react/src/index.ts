@@ -6,8 +6,10 @@ export {
   type OverlayPluginProviderProps,
 } from "./overlay/overlay-plugin-provider";
 export type {
+  OverlayListProposedChangesHandler,
   OverlayPlugin,
   OverlayPluginContext,
+  OverlayProposedChange,
   OverlayResultLink,
   OverlaySelection,
   OverlaySubmitHandler,

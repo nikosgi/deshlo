@@ -1,3 +1,5 @@
+import type { OverlayProposedChange } from "@deshlo/core/overlay-plugin";
+
 import { SourceInspectorError } from "./errors";
 import { createGitHubProvider, type RepoProvider } from "./githubProvider";
 import {
@@ -5,6 +7,13 @@ import {
   type HostConfigInput,
 } from "./hostConfig";
 import { applyTextReplacement } from "./jsxTextEdit";
+import {
+  createManagedPrState,
+  parseManagedPrState,
+  upsertManagedPrStateChange,
+  writeManagedPrState,
+  type ManagedPrState,
+} from "./prState";
 import { parseSourceLoc } from "./sourceLoc";
 import type {
   BranchesSuccess,
@@ -23,7 +32,9 @@ function normalizeRepoPath(value: string): string {
 function resolveGitHubFilePath(sourceFilePath: string, prefixOverride?: string): string {
   const normalizedSourcePath = normalizeRepoPath(sourceFilePath);
   const rawPrefix =
-    prefixOverride?.trim() || process.env.NEXT_PUBLIC_SOURCE_INSPECTOR_GITHUB_PATH_PREFIX?.trim() || "";
+    prefixOverride?.trim() ||
+    process.env.NEXT_PUBLIC_SOURCE_INSPECTOR_GITHUB_PATH_PREFIX?.trim() ||
+    "";
   const normalizedPrefix = rawPrefix
     .replace(/\\/g, "/")
     .replace(/^\/+/, "")
@@ -88,92 +99,12 @@ function assertValidInput(input: ProposedChangeInput): void {
   }
 }
 
-export interface ClientRuntimeContext {
-  token: string;
-  runtime?: SourceInspectorRuntimeOptions;
+function hasKnownCommitSha(commitSha?: string): commitSha is string {
+  return Boolean(commitSha && commitSha.trim() && commitSha.trim() !== "unknown");
 }
 
-export interface SourceInspectorRuntimeOptions {
-  host?: string;
-  hostConfig?: HostConfigInput;
-  githubPathPrefix?: string;
-  branchPrefix?: string;
-}
-
-function createProviderFromContext(context: ClientRuntimeContext): RepoProvider {
-  const token = context.token.trim();
-  if (!token) {
-    throw new SourceInspectorError("AUTH_REQUIRED", "GitHub token is required.");
-  }
-
-  const repoConfig = resolveRepoConfigForCurrentHost(
-    context.runtime?.host,
-    context.runtime?.hostConfig
-  );
-  return createGitHubProvider(repoConfig, token);
-}
-
-export async function getBranches(context: ClientRuntimeContext): Promise<BranchesSuccess> {
-  const repoConfig = resolveRepoConfigForCurrentHost(
-    context.runtime?.host,
-    context.runtime?.hostConfig
-  );
-  const provider = createGitHubProvider(repoConfig, context.token);
-
-  const branches = await provider.listBranches();
-  if (branches.length === 0) {
-    throw new SourceInspectorError("BASE_BRANCH_NOT_FOUND", "Repository has no branches.");
-  }
-
-  const fallback = branches.includes("main") ? "main" : branches[0];
-
-  return {
-    branches,
-    defaultBaseBranch: repoConfig.defaultBaseBranch || fallback,
-  };
-}
-
-async function buildPreview(
-  input: ProposedChangeInput,
-  provider: RepoProvider,
-  runtime?: SourceInspectorRuntimeOptions
-): Promise<{ preview: PreviewChangeSuccess; updatedSourceCode: string }> {
-  assertValidInput(input);
-
-  const parsedSourceLoc = parseSourceLoc(input.sourceLoc);
-  const repoFilePath = resolveGitHubFilePath(parsedSourceLoc.filePath, runtime?.githubPathPrefix);
-  await provider.getBranchHeadSha(input.baseBranch);
-  const file = await provider.getFileContent(repoFilePath, input.baseBranch);
-
-  const replacement = applyTextReplacement({
-    sourceCode: file.content,
-    sourceLoc: parsedSourceLoc,
-    tagName: input.tagName,
-    selectedText: input.selectedText,
-    proposedText: input.proposedText,
-  });
-
-  return {
-    preview: {
-      filePath: repoFilePath,
-      oldText: replacement.oldText,
-      newText: replacement.newText,
-      line: parsedSourceLoc.line,
-      column: parsedSourceLoc.column,
-      tagName: input.tagName,
-      branchNamePreview: generateBranchName(input.tagName, runtime?.branchPrefix),
-    },
-    updatedSourceCode: replacement.updatedSourceCode,
-  };
-}
-
-export async function previewProposedChangeWithProvider(
-  input: ProposedChangeInput,
-  provider: RepoProvider,
-  runtime?: SourceInspectorRuntimeOptions
-): Promise<PreviewChangeSuccess> {
-  const { preview } = await buildPreview(input, provider, runtime);
-  return preview;
+function toIsoNow(): string {
+  return new Date().toISOString();
 }
 
 function buildPrBody(params: {
@@ -199,36 +130,258 @@ function buildPrBody(params: {
   return lines.join("\n");
 }
 
+export interface ClientRuntimeContext {
+  token: string;
+  runtime?: SourceInspectorRuntimeOptions;
+}
+
+export interface SourceInspectorRuntimeOptions {
+  host?: string;
+  hostConfig?: HostConfigInput;
+  githubPathPrefix?: string;
+  branchPrefix?: string;
+}
+
+interface ReplacementResult {
+  preview: PreviewChangeSuccess;
+  updatedSourceCode: string;
+}
+
+interface ReusableManagedPr {
+  prNumber: number;
+  prUrl: string;
+  branchName: string;
+  body: string;
+  state: ManagedPrState;
+}
+
+function createProviderFromContext(context: ClientRuntimeContext): RepoProvider {
+  const token = context.token.trim();
+  if (!token) {
+    throw new SourceInspectorError("AUTH_REQUIRED", "GitHub token is required.");
+  }
+
+  const repoConfig = resolveRepoConfigForCurrentHost(
+    context.runtime?.host,
+    context.runtime?.hostConfig
+  );
+  return createGitHubProvider(repoConfig, token);
+}
+
+async function resolveReplacement(params: {
+  input: ProposedChangeInput;
+  provider: RepoProvider;
+  runtime?: SourceInspectorRuntimeOptions;
+  ref: string;
+  selectedText: string;
+}): Promise<ReplacementResult> {
+  const { input, provider, runtime, ref, selectedText } = params;
+  const parsedSourceLoc = parseSourceLoc(input.sourceLoc);
+  const repoFilePath = resolveGitHubFilePath(parsedSourceLoc.filePath, runtime?.githubPathPrefix);
+  const file = await provider.getFileContent(repoFilePath, ref);
+
+  const replacement = applyTextReplacement({
+    sourceCode: file.content,
+    sourceLoc: parsedSourceLoc,
+    tagName: input.tagName,
+    selectedText,
+    proposedText: input.proposedText,
+  });
+
+  return {
+    preview: {
+      filePath: repoFilePath,
+      oldText: replacement.oldText,
+      newText: replacement.newText,
+      line: parsedSourceLoc.line,
+      column: parsedSourceLoc.column,
+      tagName: input.tagName,
+      branchNamePreview: generateBranchName(input.tagName, runtime?.branchPrefix),
+    },
+    updatedSourceCode: replacement.updatedSourceCode,
+  };
+}
+
+async function buildPreview(
+  input: ProposedChangeInput,
+  provider: RepoProvider,
+  runtime?: SourceInspectorRuntimeOptions
+): Promise<ReplacementResult> {
+  assertValidInput(input);
+  await provider.getBranchHeadSha(input.baseBranch);
+
+  return resolveReplacement({
+    input,
+    provider,
+    runtime,
+    ref: input.baseBranch,
+    selectedText: input.selectedText,
+  });
+}
+
+function findExistingChangeSelectedText(
+  state: ManagedPrState,
+  sourceLoc: string
+): string | null {
+  const existing = state.changes.find((change) => change.sourceLoc === sourceLoc);
+  return existing ? existing.proposedText : null;
+}
+
+async function findReusableManagedPr(
+  provider: RepoProvider,
+  input: ProposedChangeInput
+): Promise<ReusableManagedPr | null> {
+  if (!hasKnownCommitSha(input.commitSha)) {
+    return null;
+  }
+
+  const openPrs = await provider.listOpenPullRequests();
+  for (const pr of openPrs) {
+    if (!pr.draft || pr.baseBranch !== input.baseBranch) {
+      continue;
+    }
+
+    const state = parseManagedPrState(pr.body);
+    if (!state) {
+      continue;
+    }
+
+    if (state.base.branch !== input.baseBranch || state.base.commitSha !== input.commitSha) {
+      continue;
+    }
+
+    return {
+      prNumber: pr.prNumber,
+      prUrl: pr.prUrl,
+      branchName: pr.headBranch,
+      body: pr.body,
+      state,
+    };
+  }
+
+  return null;
+}
+
+export async function getBranches(context: ClientRuntimeContext): Promise<BranchesSuccess> {
+  const repoConfig = resolveRepoConfigForCurrentHost(
+    context.runtime?.host,
+    context.runtime?.hostConfig
+  );
+  const provider = createGitHubProvider(repoConfig, context.token);
+
+  const branches = await provider.listBranches();
+  if (branches.length === 0) {
+    throw new SourceInspectorError("BASE_BRANCH_NOT_FOUND", "Repository has no branches.");
+  }
+
+  const fallback = branches.includes("main") ? "main" : branches[0];
+
+  return {
+    branches,
+    defaultBaseBranch: repoConfig.defaultBaseBranch || fallback,
+  };
+}
+
+export async function previewProposedChangeWithProvider(
+  input: ProposedChangeInput,
+  provider: RepoProvider,
+  runtime?: SourceInspectorRuntimeOptions
+): Promise<PreviewChangeSuccess> {
+  const { preview } = await buildPreview(input, provider, runtime);
+  return preview;
+}
+
 export async function createDraftPrFromProposedChangeWithProvider(
   input: ProposedChangeInput,
   provider: RepoProvider,
   runtime?: SourceInspectorRuntimeOptions
 ): Promise<CreateDraftPrSuccess> {
-  const { preview, updatedSourceCode } = await buildPreview(input, provider, runtime);
-  const branchName = generateBranchName(input.tagName, runtime?.branchPrefix);
-
+  assertValidInput(input);
   const baseSha = await provider.getBranchHeadSha(input.baseBranch);
-  await provider.createBranch(branchName, baseSha);
+  const reusableManagedPr = await findReusableManagedPr(provider, input);
 
-  const currentFile = await provider.getFileContent(preview.filePath, input.baseBranch);
-  const commitMessage = `Source Inspector: update ${preview.tagName} text in ${preview.filePath}`;
+  const branchName = reusableManagedPr
+    ? reusableManagedPr.branchName
+    : generateBranchName(input.tagName, runtime?.branchPrefix);
+
+  const replacement = await resolveReplacement({
+    input,
+    provider,
+    runtime,
+    ref: reusableManagedPr ? reusableManagedPr.branchName : input.baseBranch,
+    selectedText:
+      reusableManagedPr && reusableManagedPr.state
+        ? findExistingChangeSelectedText(reusableManagedPr.state, input.sourceLoc) || input.selectedText
+        : input.selectedText,
+  });
+
+  if (!reusableManagedPr) {
+    await provider.createBranch(branchName, baseSha);
+  }
+
+  const currentFile = await provider.getFileContent(
+    replacement.preview.filePath,
+    reusableManagedPr ? reusableManagedPr.branchName : input.baseBranch
+  );
+  const commitMessage = `Source Inspector: update ${replacement.preview.tagName} text in ${replacement.preview.filePath}`;
 
   const commit = await provider.updateFile({
-    path: preview.filePath,
+    path: replacement.preview.filePath,
     branch: branchName,
     sha: currentFile.sha,
-    content: updatedSourceCode,
+    content: replacement.updatedSourceCode,
     message: commitMessage,
   });
 
-  const prTitle = `Source Inspector: update ${preview.tagName} text in ${preview.filePath}`;
-  const prBody = buildPrBody({
-    sourceLoc: input.sourceLoc,
-    oldText: preview.oldText,
-    newText: preview.newText,
-    baseBranch: input.baseBranch,
-    commitSha: input.commitSha,
-  });
+  const updatedAt = toIsoNow();
+
+  if (reusableManagedPr) {
+    const updatedState = upsertManagedPrStateChange(reusableManagedPr.state, {
+      sourceLoc: input.sourceLoc,
+      tagName: input.tagName,
+      selectedText: input.selectedText,
+      proposedText: replacement.preview.newText,
+      lastAppliedCommitSha: commit.commitSha,
+      updatedAt,
+    });
+    const nextPrBody = writeManagedPrState(reusableManagedPr.body, updatedState);
+    await provider.updatePullRequestBody(reusableManagedPr.prNumber, nextPrBody);
+
+    return {
+      action: "updated",
+      branchName,
+      commitSha: commit.commitSha,
+      prNumber: reusableManagedPr.prNumber,
+      prUrl: reusableManagedPr.prUrl,
+    };
+  }
+
+  const state = createManagedPrState(
+    {
+      branch: input.baseBranch,
+      commitSha: hasKnownCommitSha(input.commitSha) ? input.commitSha : "unknown",
+    },
+    {
+      sourceLoc: input.sourceLoc,
+      tagName: input.tagName,
+      selectedText: input.selectedText,
+      proposedText: replacement.preview.newText,
+      lastAppliedCommitSha: commit.commitSha,
+      updatedAt,
+    }
+  );
+
+  const prTitle = `Source Inspector: update ${replacement.preview.tagName} text in ${replacement.preview.filePath}`;
+  const prBody = writeManagedPrState(
+    buildPrBody({
+      sourceLoc: input.sourceLoc,
+      oldText: replacement.preview.oldText,
+      newText: replacement.preview.newText,
+      baseBranch: input.baseBranch,
+      commitSha: input.commitSha,
+    }),
+    state
+  );
 
   const pr = await provider.createDraftPullRequest({
     title: prTitle,
@@ -238,11 +391,45 @@ export async function createDraftPrFromProposedChangeWithProvider(
   });
 
   return {
+    action: "created",
     branchName,
     commitSha: commit.commitSha,
     prNumber: pr.prNumber,
     prUrl: pr.prUrl,
   };
+}
+
+export async function listProposedChangesWithProvider(
+  provider: RepoProvider
+): Promise<OverlayProposedChange[]> {
+  const openPrs = await provider.listOpenPullRequests();
+  const mapped: OverlayProposedChange[] = [];
+
+  for (const pr of openPrs) {
+    const state = parseManagedPrState(pr.body);
+    if (!state) {
+      continue;
+    }
+
+    for (const change of state.changes) {
+      mapped.push({
+        changeId: change.changeId,
+        sourceLoc: change.sourceLoc,
+        tagName: change.tagName,
+        selectedText: change.selectedText,
+        proposedText: change.proposedText,
+        status: change.status,
+        baseBranch: state.base.branch,
+        baseCommitSha: state.base.commitSha,
+        lastAppliedCommitSha: change.lastAppliedCommitSha,
+        updatedAt: change.updatedAt,
+        prNumber: pr.prNumber,
+        prUrl: pr.prUrl,
+      });
+    }
+  }
+
+  return mapped.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 export async function previewProposedChange(
@@ -259,4 +446,11 @@ export async function createDraftPrFromProposedChange(
 ): Promise<CreateDraftPrSuccess> {
   const provider = createProviderFromContext(context);
   return createDraftPrFromProposedChangeWithProvider(input, provider, context.runtime);
+}
+
+export async function listProposedChanges(
+  context: ClientRuntimeContext
+): Promise<OverlayProposedChange[]> {
+  const provider = createProviderFromContext(context);
+  return listProposedChangesWithProvider(provider);
 }

@@ -11,6 +11,21 @@ export interface OverlaySubmitInput extends OverlaySelection {
   proposedText: string;
 }
 
+export interface OverlayProposedChange {
+  changeId: string;
+  sourceLoc: string;
+  tagName: string;
+  selectedText: string;
+  proposedText: string;
+  status: string;
+  baseBranch: string;
+  baseCommitSha: string;
+  lastAppliedCommitSha: string;
+  updatedAt: string;
+  prNumber: number;
+  prUrl: string;
+}
+
 export interface OverlayResultLink {
   label: string;
   url: string;
@@ -31,9 +46,14 @@ export type OverlaySubmitHandler = (
   context: OverlayPluginContext
 ) => Promise<OverlaySubmitResult> | OverlaySubmitResult;
 
+export type OverlayListProposedChangesHandler = (
+  context: OverlayPluginContext
+) => Promise<OverlayProposedChange[]> | OverlayProposedChange[];
+
 export interface OverlayPlugin {
   id: string;
   submit: OverlaySubmitHandler;
+  listProposedChanges?: OverlayListProposedChangesHandler;
 }
 
 export function normalizeOverlayText(value: string): string {

@@ -6,6 +6,7 @@ import {
   buildOverlaySubmitInput,
   normalizeOverlayText,
   toOverlayErrorResult,
+  type OverlayProposedChange,
   type OverlaySelection,
   type OverlaySubmitHandler,
   type OverlaySubmitResult,
@@ -21,6 +22,30 @@ import { resolveSubmitHandler } from "./submit-handler";
 const DEFAULT_ATTRIBUTE_NAME = "data-src-loc";
 const DEFAULT_REVISION_ATTRIBUTE_NAME = "data-src-rev";
 const DEFAULT_TRIGGER_KEY: TriggerKey = "alt";
+
+function resolveCurrentRevision(
+  selection: OverlaySelection | null,
+  attributeName: string
+): string | null {
+  if (selection?.commitSha && selection.commitSha !== "unknown") {
+    return selection.commitSha;
+  }
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const revisionElement = document.querySelector(
+    `[${attributeName}][${DEFAULT_REVISION_ATTRIBUTE_NAME}]`
+  ) as HTMLElement | null;
+  const revisionValue = revisionElement?.getAttribute(DEFAULT_REVISION_ATTRIBUTE_NAME)?.trim();
+
+  if (!revisionValue || revisionValue === "unknown") {
+    return null;
+  }
+
+  return revisionValue;
+}
 
 function isTriggerPressed(event: MouseEvent, triggerKey: TriggerKey): boolean {
   switch (triggerKey) {
@@ -73,6 +98,11 @@ export default function SourceInspector({
   const [proposedText, setProposedTextState] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [result, setResult] = useState<OverlaySubmitResult | null>(null);
+  const [changes, setChanges] = useState<OverlayProposedChange[]>([]);
+  const [changesLoading, setChangesLoading] = useState<boolean>(false);
+  const [changesError, setChangesError] = useState<string | null>(null);
+  const [changesTab, setChangesTab] = useState<"current" | "all">("current");
+  const currentRevision = resolveCurrentRevision(selection, attributeName);
 
   const highlightedElement = useRef<HTMLElement | null>(null);
 
@@ -155,6 +185,38 @@ export default function SourceInspector({
     setResult(null);
   }
 
+  async function refreshChanges(): Promise<void> {
+    if (!wrapperPlugin?.listProposedChanges) {
+      setChanges([]);
+      setChangesError(null);
+      setChangesLoading(false);
+      return;
+    }
+
+    setChangesLoading(true);
+    setChangesError(null);
+
+    try {
+      const fetchedChanges = await wrapperPlugin.listProposedChanges({
+        host: window.location.host,
+      });
+      setChanges(fetchedChanges);
+    } catch (error) {
+      setChanges([]);
+      setChangesError(toOverlayErrorResult(error).message);
+    } finally {
+      setChangesLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!inspectorEnabled) {
+      return;
+    }
+
+    void refreshChanges();
+  }, [inspectorEnabled, wrapperPlugin]);
+
   async function submit(): Promise<void> {
     if (!selection) {
       setResult({
@@ -198,6 +260,7 @@ export default function SourceInspector({
 
       if (submitResult.ok) {
         onSubmitComplete?.(submitResult, selection);
+        await refreshChanges();
       } else {
         onSubmitError?.(submitResult, selection);
       }
@@ -215,23 +278,36 @@ export default function SourceInspector({
       inspectorEnabled,
       triggerKey,
       pluginId: resolvedSubmit.pluginId,
+      currentRevision,
       selection,
       selectionWarning,
       proposedText,
       submitting,
       result,
+      changes,
+      changesLoading,
+      changesError,
+      changesTab,
       setProposedText,
       submit,
+      refreshChanges,
+      setChangesTab,
     }),
     [
       inspectorEnabled,
       triggerKey,
       resolvedSubmit.pluginId,
+      currentRevision,
       selection,
       selectionWarning,
       proposedText,
       submitting,
       result,
+      changes,
+      changesLoading,
+      changesError,
+      changesTab,
+      wrapperPlugin,
     ]
   );
 

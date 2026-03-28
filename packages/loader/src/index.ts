@@ -24,8 +24,8 @@ function normalizeOptions(options: LoaderOptions) {
         : DEFAULT_ATTRIBUTE_NAME,
     revisionAttributeName: DEFAULT_REVISION_ATTRIBUTE_NAME,
     revisionValue: resolveBuildCommitSha(),
-    wrapLooseTextNodes: options.wrapLooseTextNodes === true,
-    annotateLeafNodesOnly: options.annotateLeafNodesOnly === true,
+    wrapLooseTextNodes: true,
+    annotateLeafNodesOnly: true,
   };
 }
 

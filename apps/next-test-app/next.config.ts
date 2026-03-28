@@ -1,18 +1,35 @@
-import { createSourceInspectorTurbopackRules, withSourceInspectorWebpack } from "@deshlo/nextjs";
-
-const sourceInspectorOptions = {
-  enabled: process.env.NEXT_PUBLIC_SOURCE_INSPECTOR === "1",
-  include: ["app", "components"],
-  wrapLooseTextNodes: true,
-  annotateLeafNodesOnly: true,
-};
 
 module.exports = {
   reactStrictMode: true,
-  webpack(config: any) {
-    return withSourceInspectorWebpack(config, sourceInspectorOptions);
-  },
+  // webpack(config: any) {
+  //   config.module.rules.unshift({
+  //     test: /\.[jt]sx?$/,
+  //     exclude: /node_modules/,
+  //     enforce: "pre",
+  //     use: [
+  //       {
+  //         loader: "@deshlo/loader",
+  //         options: {
+  //           attributeName: "data-src-loc",
+  //           wrapLooseTextNodes: true,
+  //           annotateLeafNodesOnly: true,
+  //         },
+  //       },
+  //     ],
+  //   });
+  //   return config
+  // },
   turbopack: {
-    rules: createSourceInspectorTurbopackRules(sourceInspectorOptions),
-  },
+    rules: {
+      "*": {
+        condition: {
+          all: [
+            { not: "foreign" },
+            { path: /\.(?:[tj]sx?)$/ }, // .js .jsx .ts .tsx
+          ],
+        },
+        loaders: ["@deshlo/loader"],
+      },
+    },
+  }
 };
