@@ -24,8 +24,19 @@ export interface RepoProvider {
   listBranches(): Promise<string[]>;
   listOpenPullRequests(): Promise<OpenPullRequestResponse[]>;
   getBranchHeadSha(branch: string): Promise<string>;
+  getCommitTreeSha(commitSha: string): Promise<string>;
   getFileContent(path: string, ref: string): Promise<FileContentResponse>;
   createBranch(branch: string, baseSha: string): Promise<void>;
+  createTree(params: {
+    baseTreeSha: string;
+    files: Array<{ path: string; content: string }>;
+  }): Promise<string>;
+  createCommit(params: {
+    message: string;
+    treeSha: string;
+    parentCommitSha: string;
+  }): Promise<string>;
+  updateBranchHead(params: { branch: string; commitSha: string }): Promise<void>;
   updatePullRequestBody(prNumber: number, body: string): Promise<void>;
   updateFile(params: {
     path: string;
@@ -216,6 +227,28 @@ export function createGitHubProvider(
       }
     },
 
+    async getCommitTreeSha(commitSha: string) {
+      try {
+        const response = await octokit.request("GET /repos/{owner}/{repo}/git/commits/{commit_sha}", {
+          owner: config.owner,
+          repo: config.repo,
+          commit_sha: commitSha,
+        });
+
+        const treeSha = response.data.tree?.sha;
+        if (!treeSha) {
+          throw new SourceInspectorError(
+            "PROVIDER_ERROR",
+            `Could not resolve tree SHA for commit ${commitSha}.`
+          );
+        }
+
+        return treeSha;
+      } catch (error) {
+        toProviderError(error);
+      }
+    },
+
     async createBranch(branch: string, baseSha: string) {
       try {
         await octokit.request("POST /repos/{owner}/{repo}/git/refs", {
@@ -233,6 +266,56 @@ export function createGitHubProvider(
           );
         }
 
+        toProviderError(error);
+      }
+    },
+
+    async createTree({ baseTreeSha, files }) {
+      try {
+        const response = await octokit.request("POST /repos/{owner}/{repo}/git/trees", {
+          owner: config.owner,
+          repo: config.repo,
+          base_tree: baseTreeSha,
+          tree: files.map((file) => ({
+            path: file.path,
+            mode: "100644",
+            type: "blob",
+            content: file.content,
+          })),
+        });
+
+        return response.data.sha;
+      } catch (error) {
+        toProviderError(error);
+      }
+    },
+
+    async createCommit({ message, treeSha, parentCommitSha }) {
+      try {
+        const response = await octokit.request("POST /repos/{owner}/{repo}/git/commits", {
+          owner: config.owner,
+          repo: config.repo,
+          message,
+          tree: treeSha,
+          parents: [parentCommitSha],
+        });
+
+        return response.data.sha;
+      } catch (error) {
+        toProviderError(error);
+      }
+    },
+
+    async updateBranchHead({ branch, commitSha }) {
+      try {
+        await octokit.request("PATCH /repos/{owner}/{repo}/git/refs/{ref}", {
+          owner: config.owner,
+          repo: config.repo,
+          ref: `heads/${branch}`,
+          sha: commitSha,
+          force: false,
+        });
+      } catch (error) {
         toProviderError(error);
       }
     },

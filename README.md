@@ -22,6 +22,8 @@ Yarn workspaces monorepo focused on the React ecosystem with a Next.js App Route
   Local Next App Router test app.
 - `@deshlo/react-sample-app`
   Local plain React sample app (Vite).
+- `@deshlo/admin-app`
+  Local admin UI for creating projects and API keys against `annotations-api`.
 
 ## Monorepo commands
 
@@ -31,6 +33,35 @@ yarn build
 yarn test
 yarn dev:test-app
 yarn dev:react-sample
+yarn dev:admin-app
+```
+
+## Client Onboarding
+
+Client-facing onboarding flow:
+
+1. Open dashboard app (`yarn dev:admin-app`) and sign in with GitHub.
+2. Create a project.
+3. Generate a `pk_*` API key.
+4. Add key to consumer app and use the HTTP annotations plugin.
+
+Example plugin wiring:
+
+```tsx
+import { AnnotationGate, AnnotationPluginProvider, createHttpAnnotationsPlugin } from "@deshlo/annotations";
+
+const plugin = createHttpAnnotationsPlugin({
+  apiBaseUrl: "http://localhost:8080",
+  apiKey: process.env.NEXT_PUBLIC_DESHLO_API_KEY || "",
+});
+
+export function App() {
+  return (
+    <AnnotationPluginProvider plugin={plugin}>
+      <AnnotationGate />
+    </AnnotationPluginProvider>
+  );
+}
 ```
 
 ## Run the Next test app

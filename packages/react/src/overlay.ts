@@ -8,12 +8,15 @@ export {
   type OverlayPluginProviderProps,
 } from "./overlay/overlay-plugin-provider";
 export type {
+  OverlayBatchSubmitHandler,
+  OverlayBatchSubmitInput,
+  OverlayBatchSubmitResult,
   OverlayPlugin,
+  OverlayListProposedChangesHandler,
   OverlayPluginContext,
   OverlayProposedChange,
   OverlayResultLink,
   OverlaySelection,
-  OverlayListProposedChangesHandler,
   OverlaySubmitHandler,
   OverlaySubmitInput,
   OverlaySubmitResult,

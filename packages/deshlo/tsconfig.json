@@ -12,6 +12,12 @@
     ],
     "baseUrl": ".",
     "paths": {
+      "@deshlo/annotations": [
+        "../annotations/build/src/index.d.ts"
+      ],
+      "@deshlo/annotations/github": [
+        "../annotations/build/src/github.d.ts"
+      ],
       "@deshlo/react/overlay": [
         "../react/build/src/overlay.d.ts"
       ],

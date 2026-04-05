@@ -1,4 +1,6 @@
 import type {
+  OverlayBatchSubmitInput,
+  OverlayBatchSubmitResult,
   OverlayPlugin,
   OverlayPluginContext,
   OverlaySubmitInput,
@@ -8,6 +10,7 @@ import type {
 import { SourceInspectorError } from "./lib/errors";
 import {
   createDraftPrFromProposedChange,
+  createDraftPrFromProposedChanges,
   getBranches,
   listProposedChanges,
   type SourceInspectorRuntimeOptions,
@@ -60,6 +63,17 @@ function toProposedChangeInput(input: OverlaySubmitInput, baseBranch: string) {
     commitSha: input.commitSha,
     baseBranch,
   };
+}
+
+function toProposedBatchInput(input: OverlayBatchSubmitInput, baseBranch: string) {
+  return input.changes.map((change) => ({
+    sourceLoc: change.sourceLoc,
+    tagName: change.tagName,
+    selectedText: change.selectedText,
+    proposedText: change.proposedText,
+    commitSha: change.commitSha,
+    baseBranch,
+  }));
 }
 
 export function createGitHubBrowserPlugin(
@@ -115,6 +129,63 @@ export function createGitHubBrowserPlugin(
         };
       } catch (error) {
         return toErrorResult(error);
+      }
+    },
+    async submitBatch(
+      input: OverlayBatchSubmitInput,
+      context: OverlayPluginContext
+    ): Promise<OverlayBatchSubmitResult> {
+      const token = resolveToken(config);
+      if (!token) {
+        return {
+          ok: false,
+          message:
+            "AUTH_REQUIRED: Configure NEXT_PUBLIC_SOURCE_INSPECTOR_GITHUB_TOKEN or pass token.",
+          submittedCount: 0,
+        };
+      }
+
+      const runtime = {
+        ...config,
+        host: resolveHost(context, config),
+      };
+
+      try {
+        const baseBranch =
+          config.baseBranch ||
+          (await getBranches({
+            token,
+            runtime,
+          })).defaultBaseBranch;
+
+        const result = await createDraftPrFromProposedChanges(
+          toProposedBatchInput(input, baseBranch),
+          {
+            token,
+            runtime,
+          }
+        );
+
+        const actionLabel = result.action === "updated" ? "updated" : "created";
+        const affectedCount = result.affectedCount || input.changes.length;
+
+        return {
+          ok: true,
+          message: `Draft PR #${result.prNumber} ${actionLabel} with ${affectedCount} change(s) on branch ${result.branchName}.`,
+          links: [
+            {
+              label: `Open PR #${result.prNumber}`,
+              url: result.prUrl,
+            },
+          ],
+          submittedCount: affectedCount,
+        };
+      } catch (error) {
+        const mappedError = toErrorResult(error);
+        return {
+          ...mappedError,
+          submittedCount: 0,
+        };
       }
     },
     async listProposedChanges(context: OverlayPluginContext) {

@@ -80,6 +80,45 @@ describe("createGitHubProvider", () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
+  it("creates tree/commit and updates branch head", async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: {
+          tree: { sha: "tree-base-sha" },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: { sha: "tree-next-sha" },
+      })
+      .mockResolvedValueOnce({
+        data: { sha: "commit-next-sha" },
+      })
+      .mockResolvedValueOnce({});
+
+    const provider = createGitHubProvider(REPO_CONFIG, "token", { request } as any);
+
+    const baseTreeSha = await provider.getCommitTreeSha("base-commit-sha");
+    const treeSha = await provider.createTree({
+      baseTreeSha,
+      files: [{ path: "app/page.tsx", content: "hello" }],
+    });
+    const commitSha = await provider.createCommit({
+      message: "commit message",
+      treeSha,
+      parentCommitSha: "base-commit-sha",
+    });
+    await provider.updateBranchHead({
+      branch: "source-inspector/h1-1",
+      commitSha,
+    });
+
+    expect(baseTreeSha).toBe("tree-base-sha");
+    expect(treeSha).toBe("tree-next-sha");
+    expect(commitSha).toBe("commit-next-sha");
+    expect(request).toHaveBeenCalledTimes(4);
+  });
+
   it("maps missing base branch to BASE_BRANCH_NOT_FOUND", async () => {
     const request = vi.fn().mockRejectedValue({ status: 404 });
     const provider = createGitHubProvider(REPO_CONFIG, "token", { request } as any);

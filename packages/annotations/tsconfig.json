@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["dom", "es2020"],
+    "jsx": "react-jsx",
+    "types": ["node", "react"],
+    "baseUrl": ".",
+    "paths": {
+      "@deshlo/core": ["../core/build/src/index.d.ts"],
+      "@deshlo/core/annotations": ["../core/build/src/annotations.d.ts"],
+      "@deshlo/plugin-github-annotations": ["../../plugins/github-annotations/build/src/index.d.ts"]
+    },
+    "outDir": "./build/src",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["build", "node_modules"]
+}

@@ -6,10 +6,15 @@ vi.mock("../lib/workflow", () => ({
     defaultBaseBranch: "main",
   }),
   createDraftPrFromProposedChange: vi.fn(),
+  createDraftPrFromProposedChanges: vi.fn(),
   listProposedChanges: vi.fn().mockResolvedValue([]),
 }));
 
-import { createDraftPrFromProposedChange, listProposedChanges } from "../lib/workflow";
+import {
+  createDraftPrFromProposedChange,
+  createDraftPrFromProposedChanges,
+  listProposedChanges,
+} from "../lib/workflow";
 import { createGitHubBrowserPlugin } from "../plugin";
 
 describe("createGitHubBrowserPlugin", () => {
@@ -73,6 +78,48 @@ describe("createGitHubBrowserPlugin", () => {
         url: "https://example.com/pr/42",
       },
     ]);
+  });
+
+  it("maps batch workflow success to batch submit result", async () => {
+    vi.mocked(createDraftPrFromProposedChanges).mockResolvedValue({
+      action: "created",
+      branchName: "source-inspector/batch-1",
+      commitSha: "commit-sha",
+      prNumber: 84,
+      prUrl: "https://example.com/pr/84",
+      affectedCount: 2,
+    });
+
+    const plugin = createGitHubBrowserPlugin({
+      token: "token",
+      baseBranch: "main",
+    });
+
+    const result = await plugin.submitBatch?.(
+      {
+        changes: [
+          {
+            sourceLoc: "app/page.tsx:1:1",
+            tagName: "h1",
+            selectedText: "Old 1",
+            proposedText: "New 1",
+          },
+          {
+            sourceLoc: "app/page.tsx:2:1",
+            tagName: "p",
+            selectedText: "Old 2",
+            proposedText: "New 2",
+          },
+        ],
+      },
+      { host: "localhost:3000" }
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      submittedCount: 2,
+    });
+    expect(result?.message).toContain("84");
   });
 
   it("delegates listProposedChanges to workflow list API", async () => {

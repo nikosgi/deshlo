@@ -35,6 +35,23 @@ describe("managed PR state body helpers", () => {
     expect(parseManagedPrState("plain body")).toBeNull();
   });
 
+  it("parses legacy split-marker state format", () => {
+    const body = `Header
+<!-- deshlo:state:start -->
+{
+  "version": 1,
+  "managedBy": "deshlo/source-inspector",
+  "base": { "branch": "main", "commitSha": "rev-123" },
+  "changes": [],
+  "updatedAt": "2024-01-01T00:00:00.000Z"
+}
+<!-- deshlo:state:end -->`;
+
+    const parsed = parseManagedPrState(body);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.base.commitSha).toBe("rev-123");
+  });
+
   it("returns null for invalid marker JSON", () => {
     const body = `Header
 <!-- deshlo:state:start -->

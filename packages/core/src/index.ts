@@ -12,6 +12,12 @@ export {
   normalizeOverlayText,
   toOverlayErrorResult,
 } from "./overlay-plugin";
+export {
+  buildAnnotationPageKey,
+  normalizeAnnotationText,
+  toAnnotationErrorResult,
+} from "./annotations";
+
 export type {
   SourceInspectorAdapter,
   SourceInspectorAdapterOptions,
@@ -20,14 +26,45 @@ export type {
 } from "./shared";
 export type { InjectSourceAttributesOptions, InjectSourceAttributesResult } from "./transform";
 export type {
+  OverlayBatchSubmitHandler,
+  OverlayBatchSubmitInput,
+  OverlayBatchSubmitResult,
+  OverlayListProposedChangesHandler,
   OverlayPlugin,
   OverlayPluginContext,
   OverlayProposedChange,
   OverlayResultLink,
   OverlaySelection,
-  OverlayListProposedChangesHandler,
   OverlaySubmitHandler,
   OverlaySubmitInput,
   OverlaySubmitResult,
   TriggerKey,
 } from "./overlay-plugin";
+export type {
+  AnnotationActionResult,
+  AnnotationAnchor,
+  AnnotationContainerFingerprint,
+  AnnotationCreateThreadHandler,
+  AnnotationCreateThreadInput,
+  AnnotationListThreadsHandler,
+  AnnotationListThreadsInput,
+  AnnotationMessage,
+  AnnotationMoveThreadAnchorHandler,
+  AnnotationMoveThreadAnchorInput,
+  AnnotationPlugin,
+  AnnotationPluginContext,
+  AnnotationPoint,
+  AnnotationRect,
+  AnnotationReplyThreadHandler,
+  AnnotationReplyThreadInput,
+  AnnotationResultLink,
+  AnnotationDeleteThreadHandler,
+  AnnotationDeleteThreadInput,
+  AnnotationScrollChainNode,
+  AnnotationThread,
+  AnnotationThreadActionHandler,
+  AnnotationThreadActionInput,
+  AnnotationThreadStatus,
+  AnnotationTriggerKey,
+  AnnotationViewport,
+} from "./annotations";

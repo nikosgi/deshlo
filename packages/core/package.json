@@ -12,6 +12,11 @@
       "require": "./build/src/index.js",
       "import": "./build/src/index.js"
     },
+    "./annotations": {
+      "types": "./build/src/annotations.d.ts",
+      "require": "./build/src/annotations.js",
+      "import": "./build/src/annotations.js"
+    },
     "./overlay-plugin": {
       "types": "./build/src/overlay-plugin.d.ts",
       "require": "./build/src/overlay-plugin.js",
