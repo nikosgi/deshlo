@@ -2,31 +2,97 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { AnnotationMessage, AnnotationPoint, AnnotationThread } from "./annotation-plugin";
+import type {
+  AnnotationAnchor,
+  AnnotationMessage,
+  AnnotationPoint,
+  AnnotationThread,
+  AnnotationTriggerKey,
+} from "./annotation-plugin";
 import {
-  formatLinkedElementLabel,
+  BUBBLE_RADIUS,
+  BUBBLE_SIZE,
+  captureAnnotationAnchor,
+  resolveAnnotationPosition,
   resolveAnchorLinkedElement,
-  resolveLinkedElementCenter,
+  resolveAnchorTargetPoint,
+  resolveDeepestTargetAtPoint,
 } from "./anchor";
 import { useAnnotationContext } from "./annotation-context";
+
+type HighlightRect = AnnotationPoint & { width: number; height: number };
 
 type DragState = {
   threadId: string;
   startPointerX: number;
   startPointerY: number;
-  startLeft: number;
-  startTop: number;
+  pointerOffsetX: number;
+  pointerOffsetY: number;
   left: number;
   top: number;
   moved: boolean;
   dropPoint: AnnotationPoint;
+  pendingAnchor: AnnotationAnchor;
   linkedCenter: AnnotationPoint | null;
+  linkedRect: HighlightRect | null;
+  detached: boolean;
+  detachAnchor: AnnotationAnchor | null;
+  detachOriginCenter: AnnotationPoint | null;
+  detachBaseLeft: number;
+  detachBaseTop: number;
 };
+
+type DropOverride = {
+  left: number;
+  top: number;
+  setAt: number;
+};
+
+function isTriggerPressed(
+  event: Pick<PointerEvent, "altKey" | "shiftKey" | "metaKey" | "ctrlKey">,
+  triggerKey: AnnotationTriggerKey
+): boolean {
+  switch (triggerKey) {
+    case "alt":
+      return event.altKey;
+    case "shift":
+      return event.shiftKey;
+    case "meta":
+      return event.metaKey;
+    case "ctrl":
+      return event.ctrlKey;
+    default:
+      return false;
+  }
+}
+
+function resolveConnectorStartPoint(
+  bubbleLeft: number,
+  bubbleTop: number,
+  target: AnnotationPoint
+): AnnotationPoint {
+  const centerX = bubbleLeft + BUBBLE_RADIUS;
+  const centerY = bubbleTop + BUBBLE_RADIUS;
+  const dx = target.x - centerX;
+  const dy = target.y - centerY;
+  const distance = Math.hypot(dx, dy);
+
+  if (distance <= 0.001) {
+    return { x: centerX, y: centerY };
+  }
+
+  const ratio = BUBBLE_RADIUS / distance;
+  return {
+    x: centerX + dx * ratio,
+    y: centerY + dy * ratio,
+  };
+}
 
 export default function AnnotationBubbles() {
   const {
     enabled,
     readOnly,
+    triggerKey,
     submitting,
     draft,
     setDraftBody,
@@ -46,8 +112,9 @@ export default function AnnotationBubbles() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [dropOverrides, setDropOverrides] = useState<Record<string, DropOverride>>({});
   const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
-  const [hoverHighlightRect, setHoverHighlightRect] = useState<AnnotationPoint & { width: number; height: number } | null>(null);
+  const [highlightRects, setHighlightRects] = useState<HighlightRect[]>([]);
   const dragStateRef = useRef<DragState | null>(null);
 
   const visibleThreads = useMemo<AnnotationThread[]>(
@@ -56,33 +123,54 @@ export default function AnnotationBubbles() {
   );
 
   useEffect(() => {
-    if (!hoveredThreadId) {
-      setHoverHighlightRect(null);
-      return;
-    }
-
     let frame = 0;
 
     const update = () => {
-      const thread = visibleThreads.find((item) => item.threadId === hoveredThreadId);
-      if (!thread) {
-        setHoverHighlightRect(null);
+      if (dragState?.linkedRect) {
+        setHighlightRects([dragState.linkedRect]);
         return;
       }
 
-      const linked = resolveAnchorLinkedElement(thread.anchor);
-      if (!linked) {
-        setHoverHighlightRect(null);
+      const threadIds = new Set<string>();
+      if (hoveredThreadId) {
+        threadIds.add(hoveredThreadId);
+      }
+
+      for (const [threadId, isExpanded] of Object.entries(expanded)) {
+        if (isExpanded) {
+          threadIds.add(threadId);
+        }
+      }
+
+      if (threadIds.size === 0) {
+        setHighlightRects([]);
         return;
       }
 
-      const rect = linked.getBoundingClientRect();
-      setHoverHighlightRect({
-        x: rect.left,
-        y: rect.top,
-        width: rect.width,
-        height: rect.height,
-      });
+      const threadById = new Map(visibleThreads.map((thread) => [thread.threadId, thread]));
+      const nextRects: HighlightRect[] = [];
+
+      for (const threadId of threadIds) {
+        const thread = threadById.get(threadId);
+        if (!thread) {
+          continue;
+        }
+
+        const linked = resolveAnchorLinkedElement(thread.anchor);
+        if (!linked) {
+          continue;
+        }
+
+        const rect = linked.getBoundingClientRect();
+        nextRects.push({
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height,
+        });
+      }
+
+      setHighlightRects(nextRects);
     };
 
     const requestUpdate = () => {
@@ -103,7 +191,36 @@ export default function AnnotationBubbles() {
       window.removeEventListener("resize", requestUpdate);
       window.removeEventListener("scroll", requestUpdate, true);
     };
-  }, [hoveredThreadId, visibleThreads]);
+  }, [dragState?.linkedRect, expanded, hoveredThreadId, visibleThreads]);
+
+  useEffect(() => {
+    if (Object.keys(dropOverrides).length === 0) {
+      return;
+    }
+
+    const now = Date.now();
+    const nextOverrides: Record<string, DropOverride> = {};
+
+    for (const [threadId, override] of Object.entries(dropOverrides)) {
+      const position = threadPositions[threadId];
+      if (!position || !position.anchored) {
+        continue;
+      }
+
+      const closeEnough =
+        Math.abs(position.left - override.left) <= 1 &&
+        Math.abs(position.top - override.top) <= 1;
+      const expired = now - override.setAt > 2000;
+
+      if (!closeEnough && !expired) {
+        nextOverrides[threadId] = override;
+      }
+    }
+
+    if (Object.keys(nextOverrides).length !== Object.keys(dropOverrides).length) {
+      setDropOverrides(nextOverrides);
+    }
+  }, [dropOverrides, threadPositions]);
 
   if (!enabled) {
     return null;
@@ -111,16 +228,17 @@ export default function AnnotationBubbles() {
 
   return (
     <>
-      {hoverHighlightRect ? (
+      {highlightRects.map((highlightRect, index) => (
         <div
+          key={`${index}-${highlightRect.x}-${highlightRect.y}-${highlightRect.width}-${highlightRect.height}`}
           data-deshlo-annotation-ui="1"
           style={{
             position: "fixed",
-            left: hoverHighlightRect.x - 2,
-            top: hoverHighlightRect.y - 2,
-            width: hoverHighlightRect.width + 4,
-            height: hoverHighlightRect.height + 4,
-            border: "2px solid #0ea5e9",
+            left: highlightRect.x - 2,
+            top: highlightRect.y - 2,
+            width: highlightRect.width + 4,
+            height: highlightRect.height + 4,
+            border: "2px solid red",
             borderRadius: 6,
             boxShadow: "0 0 0 2px rgba(14, 165, 233, 0.25)",
             background: "rgba(14, 165, 233, 0.08)",
@@ -128,54 +246,53 @@ export default function AnnotationBubbles() {
             zIndex: 9996,
           }}
         />
-      ) : null}
+      ))}
 
-      {dragState?.linkedCenter ? (
-        <svg
-          data-deshlo-annotation-ui="1"
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 9999,
-            pointerEvents: "none",
-            overflow: "visible",
-          }}
-        >
-          <line
-            x1={dragState.left + 12}
-            y1={dragState.top + 12}
-            x2={dragState.linkedCenter.x}
-            y2={dragState.linkedCenter.y}
-            stroke="rgba(15, 23, 42, 0.45)"
-            strokeWidth={4}
-          />
-          <line
-            x1={dragState.left + 12}
-            y1={dragState.top + 12}
-            x2={dragState.linkedCenter.x}
-            y2={dragState.linkedCenter.y}
-            stroke="#0ea5e9"
-            strokeWidth={2.5}
-            strokeDasharray="7 4"
-          />
-          <circle
-            cx={dragState.left + 12}
-            cy={dragState.top + 12}
-            r={4}
-            fill="#ffffff"
-            stroke="#0ea5e9"
-            strokeWidth={2}
-          />
-          <circle
-            cx={dragState.linkedCenter.x}
-            cy={dragState.linkedCenter.y}
-            r={4}
-            fill="#ffffff"
-            stroke="#0ea5e9"
-            strokeWidth={2}
-          />
-        </svg>
-      ) : null}
+      {dragState?.moved && dragState.detached && dragState.detachOriginCenter ? (() => {
+        const start = resolveConnectorStartPoint(
+          dragState.left,
+          dragState.top,
+          dragState.detachOriginCenter
+        );
+        return (
+          <svg
+            data-deshlo-annotation-ui="1"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 9997,
+              pointerEvents: "none",
+              overflow: "visible",
+            }}
+          >
+            <line
+              x1={start.x}
+              y1={start.y}
+              x2={dragState.detachOriginCenter.x}
+              y2={dragState.detachOriginCenter.y}
+              stroke="transparent"
+              strokeWidth={4}
+            />
+            <line
+              x1={start.x}
+              y1={start.y}
+              x2={dragState.detachOriginCenter.x}
+              y2={dragState.detachOriginCenter.y}
+              stroke="#0ea5e9"
+              strokeWidth={2.5}
+              strokeDasharray="7 4"
+            />
+            <circle
+              cx={dragState.detachOriginCenter.x}
+              cy={dragState.detachOriginCenter.y}
+              r={4}
+              fill="#ffffff"
+              stroke="#0ea5e9"
+              strokeWidth={2}
+            />
+          </svg>
+        );
+      })() : null}
 
       {draft ? (
         <div
@@ -200,9 +317,6 @@ export default function AnnotationBubbles() {
             }}
           >
             <div style={{ fontWeight: 700, marginBottom: 6 }}>New Annotation</div>
-            <div style={{ opacity: 0.8, marginBottom: 8 }}>
-              Linked to: <code>{formatLinkedElementLabel(draft.anchor)}</code>
-            </div>
             <textarea
               value={draft.body}
               rows={4}
@@ -269,8 +383,16 @@ export default function AnnotationBubbles() {
         const isExpanded = Boolean(expanded[thread.threadId]);
         const replyBody = replyDrafts[thread.threadId] ?? "";
         const isDragging = dragState?.threadId === thread.threadId;
-        const bubbleLeft = isDragging ? dragState.left : position.left;
-        const bubbleTop = isDragging ? dragState.top : position.top;
+        const dropOverride = dropOverrides[thread.threadId];
+        const bubbleLeft = isDragging ? dragState.left : dropOverride?.left ?? position.left;
+        const bubbleTop = isDragging ? dragState.top : dropOverride?.top ?? position.top;
+        const isHovered = hoveredThreadId === thread.threadId;
+        const persistedLinkedCenter = !isDragging ? resolveAnchorTargetPoint(thread.anchor) : null;
+        const showPersistedLine =
+          !isDragging &&
+          thread.anchor.presentation?.mode === "detached" &&
+          (isHovered || isExpanded) &&
+          Boolean(persistedLinkedCenter);
 
         return (
           <div
@@ -291,6 +413,45 @@ export default function AnnotationBubbles() {
               zIndex: 9998,
             }}
           >
+            {showPersistedLine && persistedLinkedCenter
+              ? (() => {
+                  const start = resolveConnectorStartPoint(
+                    bubbleLeft,
+                    bubbleTop,
+                    persistedLinkedCenter
+                  );
+                  return (
+                    <svg
+                      data-deshlo-annotation-ui="1"
+                      style={{
+                        position: "fixed",
+                        inset: 0,
+                        zIndex: 9997,
+                        pointerEvents: "none",
+                        overflow: "visible",
+                      }}
+                    >
+                      <line
+                        x1={start.x}
+                        y1={start.y}
+                        x2={persistedLinkedCenter.x}
+                        y2={persistedLinkedCenter.y}
+                        stroke="transparent"
+                        strokeWidth={3}
+                      />
+                      <line
+                        x1={start.x}
+                        y1={start.y}
+                        x2={persistedLinkedCenter.x}
+                        y2={persistedLinkedCenter.y}
+                        stroke="#0ea5e9"
+                        strokeWidth={2}
+                        strokeDasharray="6 5"
+                      />
+                    </svg>
+                  );
+                })()
+              : null}
             <button
               onPointerDown={(event) => {
                 if (event.button !== 0) {
@@ -299,22 +460,67 @@ export default function AnnotationBubbles() {
 
                 event.preventDefault();
                 event.stopPropagation();
+                setHoveredThreadId(null);
+                setDropOverrides((previous) => {
+                  if (!previous[thread.threadId]) {
+                    return previous;
+                  }
+                  const next = { ...previous };
+                  delete next[thread.threadId];
+                  return next;
+                });
+
+                const initialLinkedElement = resolveAnchorLinkedElement(thread.anchor);
+                const initialLinkedRect = initialLinkedElement?.getBoundingClientRect();
+                const initialBubbleCenter = {
+                  x: position.left + BUBBLE_RADIUS,
+                  y: position.top + BUBBLE_RADIUS,
+                };
+                const initialDetachAnchor = thread.anchor;
+                const initialDetachOriginCenter =
+                  resolveAnchorTargetPoint(thread.anchor) || initialBubbleCenter;
+                const initialBaseAnchor: AnnotationAnchor = {
+                  ...initialDetachAnchor,
+                  presentation: {
+                    mode: "attached",
+                  },
+                };
+                const initialBasePosition = resolveAnnotationPosition(initialBaseAnchor);
 
                 const start: DragState = {
                   threadId: thread.threadId,
                   startPointerX: event.clientX,
                   startPointerY: event.clientY,
-                  startLeft: position.left,
-                  startTop: position.top,
+                  pointerOffsetX: event.clientX - position.left,
+                  pointerOffsetY: event.clientY - position.top,
                   left: position.left,
                   top: position.top,
                   moved: false,
-                  dropPoint: { x: event.clientX, y: event.clientY },
+                  dropPoint: initialBubbleCenter,
+                  pendingAnchor: thread.anchor,
                   linkedCenter:
-                    resolveLinkedElementCenter(thread.anchor) || {
-                      x: thread.anchor.targetPoint.x,
-                      y: thread.anchor.targetPoint.y,
-                    },
+                    initialLinkedRect
+                      ? {
+                          x: initialLinkedRect.left + initialLinkedRect.width / 2,
+                          y: initialLinkedRect.top + initialLinkedRect.height / 2,
+                        }
+                      : resolveAnchorTargetPoint(thread.anchor) || {
+                          x: thread.anchor.targetPoint.x,
+                          y: thread.anchor.targetPoint.y,
+                        },
+                  linkedRect: initialLinkedRect
+                    ? {
+                        x: initialLinkedRect.left,
+                        y: initialLinkedRect.top,
+                        width: initialLinkedRect.width,
+                        height: initialLinkedRect.height,
+                      }
+                    : null,
+                  detached: true,
+                  detachAnchor: initialDetachAnchor,
+                  detachOriginCenter: initialDetachOriginCenter,
+                  detachBaseLeft: initialBasePosition.left,
+                  detachBaseTop: initialBasePosition.top,
                 };
                 dragStateRef.current = start;
                 setDragState(start);
@@ -328,10 +534,99 @@ export default function AnnotationBubbles() {
                   const dx = moveEvent.clientX - current.startPointerX;
                   const dy = moveEvent.clientY - current.startPointerY;
                   const moved = current.moved || Math.abs(dx) > 3 || Math.abs(dy) > 3;
-                  const nextLeft = current.startLeft + dx;
-                  const nextTop = current.startTop + dy;
-                  const dropPoint = { x: moveEvent.clientX, y: moveEvent.clientY };
-                  const linkedCenter = current.linkedCenter;
+                  const draggedLeft = moveEvent.clientX - current.pointerOffsetX;
+                  const draggedTop = moveEvent.clientY - current.pointerOffsetY;
+                  const dropPoint = {
+                    x: draggedLeft + BUBBLE_RADIUS,
+                    y: draggedTop + BUBBLE_RADIUS,
+                  };
+                  const attached = isTriggerPressed(moveEvent, triggerKey);
+                  const detached = !attached;
+                  const enteredDetach = detached && !current.detached;
+
+                  let nextLeft = draggedLeft;
+                  let nextTop = draggedTop;
+                  let pendingAnchor = current.pendingAnchor;
+                  let linkedCenter = current.linkedCenter;
+                  let linkedRect = current.linkedRect;
+                  let detachAnchor = current.detachAnchor;
+                  let detachOriginCenter = current.detachOriginCenter;
+                  let detachBaseLeft = current.detachBaseLeft;
+                  let detachBaseTop = current.detachBaseTop;
+
+                  if (enteredDetach) {
+                    const lockedAnchor = current.pendingAnchor;
+                    const lockedBaseAnchor: AnnotationAnchor = {
+                      ...lockedAnchor,
+                      presentation: {
+                        mode: "attached",
+                      },
+                    };
+                    const lockedBasePosition = resolveAnnotationPosition(lockedBaseAnchor);
+
+                    detachAnchor = lockedAnchor;
+                    detachOriginCenter = resolveAnchorTargetPoint(lockedAnchor) || {
+                        x: current.left + BUBBLE_RADIUS,
+                        y: current.top + BUBBLE_RADIUS,
+                      };
+                    detachBaseLeft = lockedBasePosition.left;
+                    detachBaseTop = lockedBasePosition.top;
+                  }
+
+                  if (attached) {
+                    const deepestTarget = resolveDeepestTargetAtPoint(dropPoint);
+                    if (deepestTarget) {
+                      const targetRect = deepestTarget.getBoundingClientRect();
+                      const capturedAnchor = captureAnnotationAnchor(deepestTarget, dropPoint);
+                      const attachedAnchor: AnnotationAnchor = {
+                        ...capturedAnchor,
+                        presentation: {
+                          mode: "attached",
+                        },
+                      };
+                      const attachedPosition = resolveAnnotationPosition(attachedAnchor);
+
+                      linkedCenter = {
+                        x: targetRect.left + targetRect.width / 2,
+                        y: targetRect.top + targetRect.height / 2,
+                      };
+                      linkedRect = {
+                        x: targetRect.left,
+                        y: targetRect.top,
+                        width: targetRect.width,
+                        height: targetRect.height,
+                      };
+
+                      nextLeft = attachedPosition.left;
+                      nextTop = attachedPosition.top;
+                      pendingAnchor = attachedAnchor;
+                    }
+                  } else {
+                    const lockAnchor = detachAnchor || current.pendingAnchor;
+                    nextLeft = draggedLeft;
+                    nextTop = draggedTop;
+                    pendingAnchor = {
+                      ...lockAnchor,
+                      presentation: {
+                        mode: "detached",
+                        offsetX: draggedLeft - detachBaseLeft,
+                        offsetY: draggedTop - detachBaseTop,
+                      },
+                    };
+
+                    linkedCenter =
+                      detachOriginCenter || resolveAnchorTargetPoint(lockAnchor) || linkedCenter;
+                    const lockedTarget = resolveAnchorLinkedElement(lockAnchor);
+                    if (lockedTarget) {
+                      const lockedRect = lockedTarget.getBoundingClientRect();
+                      linkedRect = {
+                        x: lockedRect.left,
+                        y: lockedRect.top,
+                        width: lockedRect.width,
+                        height: lockedRect.height,
+                      };
+                    }
+                  }
 
                   const next: DragState = {
                     ...current,
@@ -339,14 +634,21 @@ export default function AnnotationBubbles() {
                     top: nextTop,
                     moved,
                     dropPoint,
+                    pendingAnchor,
                     linkedCenter,
+                    linkedRect,
+                    detached,
+                    detachAnchor,
+                    detachOriginCenter,
+                    detachBaseLeft,
+                    detachBaseTop,
                   };
 
                   dragStateRef.current = next;
                   setDragState(next);
                 };
 
-                const onPointerUp = (upEvent: PointerEvent) => {
+                const onPointerUp = () => {
                   window.removeEventListener("pointermove", onPointerMove, true);
                   window.removeEventListener("pointerup", onPointerUp, true);
                   window.removeEventListener("pointercancel", onPointerUp, true);
@@ -367,9 +669,18 @@ export default function AnnotationBubbles() {
                     return;
                   }
 
+                  setDropOverrides((previous) => ({
+                    ...previous,
+                    [thread.threadId]: {
+                      left: current.left,
+                      top: current.top,
+                      setAt: Date.now(),
+                    },
+                  }));
+
                   void moveThreadAnchor(thread.threadId, {
-                    x: upEvent.clientX,
-                    y: upEvent.clientY,
+                    point: current.dropPoint,
+                    anchor: current.pendingAnchor,
                   });
                 };
 
@@ -378,8 +689,8 @@ export default function AnnotationBubbles() {
                 window.addEventListener("pointercancel", onPointerUp, true);
               }}
               style={{
-                width: 24,
-                height: 24,
+                width: BUBBLE_SIZE,
+                height: BUBBLE_SIZE,
                 borderRadius: "999px",
                 border: "1px solid #0ea5e9",
                 background: thread.status === "resolved" ? "#1e293b" : "#0ea5e9",
@@ -412,9 +723,6 @@ export default function AnnotationBubbles() {
               >
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>
                   Thread {thread.status.toUpperCase()}
-                </div>
-                <div style={{ marginBottom: 6, opacity: 0.85 }}>
-                  Linked to: <code>{formatLinkedElementLabel(thread.anchor)}</code>
                 </div>
                 <div style={{ maxHeight: 160, overflowY: "auto", marginBottom: 8 }}>
                   {thread.messages.map((message: AnnotationMessage) => (

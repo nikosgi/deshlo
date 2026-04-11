@@ -24,7 +24,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // src/constants.ts
 var DEFAULT_ATTRIBUTE_NAME = "data-src-loc";
-var DEFAULT_REVISION_ATTRIBUTE_NAME = "data-src-rev";
 var BABEL_PARSER_PLUGINS = [
   "jsx",
   "typescript",
@@ -137,10 +136,7 @@ function transformSource(source, resourcePath, options) {
       const hasSourceAttribute = openingPath.node.attributes.some(
         (attribute) => t2.isJSXAttribute(attribute) && t2.isJSXIdentifier(attribute.name, { name: options.attributeName })
       );
-      const hasRevisionAttribute = openingPath.node.attributes.some(
-        (attribute) => t2.isJSXAttribute(attribute) && t2.isJSXIdentifier(attribute.name, { name: options.revisionAttributeName })
-      );
-      if (hasSourceAttribute && hasRevisionAttribute) {
+      if (hasSourceAttribute) {
         return;
       }
       const { line, column } = openingPath.node.loc.start;
@@ -148,15 +144,6 @@ function transformSource(source, resourcePath, options) {
       if (!hasSourceAttribute) {
         openingPath.node.attributes.push(
           t2.jsxAttribute(t2.jsxIdentifier(options.attributeName), t2.stringLiteral(locationValue))
-        );
-        changed = true;
-      }
-      if (!hasRevisionAttribute) {
-        openingPath.node.attributes.push(
-          t2.jsxAttribute(
-            t2.jsxIdentifier(options.revisionAttributeName),
-            t2.stringLiteral(options.revisionValue)
-          )
         );
         changed = true;
       }
@@ -202,11 +189,7 @@ function transformSource(source, resourcePath, options) {
         nextChildren.push(
           t2.jsxElement(
             t2.jsxOpeningElement(t2.jsxIdentifier("span"), [
-              t2.jsxAttribute(t2.jsxIdentifier(options.attributeName), t2.stringLiteral(locationValue)),
-              t2.jsxAttribute(
-                t2.jsxIdentifier(options.revisionAttributeName),
-                t2.stringLiteral(options.revisionValue)
-              )
+              t2.jsxAttribute(t2.jsxIdentifier(options.attributeName), t2.stringLiteral(locationValue))
             ]),
             t2.jsxClosingElement(t2.jsxIdentifier("span")),
             [t2.jsxText(parts.text)],
@@ -243,53 +226,10 @@ function transformSource(source, resourcePath, options) {
   };
 }
 
-// src/utils/commit.ts
-var import_node_child_process = require("node:child_process");
-var COMMIT_ENV_KEYS = [
-  "COMMIT_SHA",
-  "SOURCE_VERSION",
-  "GITHUB_SHA",
-  "CI_COMMIT_SHA",
-  "GIT_COMMIT",
-  "VERCEL_GIT_COMMIT_SHA",
-  "RENDER_GIT_COMMIT"
-];
-var cachedCommitSha = null;
-function resolveCommitFromEnv() {
-  for (const key of COMMIT_ENV_KEYS) {
-    const value = process.env[key]?.trim();
-    if (value) {
-      return value;
-    }
-  }
-  return null;
-}
-function resolveCommitFromGit() {
-  try {
-    const value = (0, import_node_child_process.execSync)("git rev-parse HEAD", {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim();
-    return value.length > 0 ? value : null;
-  } catch {
-    return null;
-  }
-}
-function resolveBuildCommitSha() {
-  if (cachedCommitSha) {
-    return cachedCommitSha;
-  }
-  const resolved = resolveCommitFromEnv() ?? resolveCommitFromGit() ?? "unknown";
-  cachedCommitSha = resolved;
-  return resolved;
-}
-
 // src/index.ts
 function normalizeOptions(options) {
   return {
     attributeName: typeof options.attributeName === "string" && options.attributeName.trim().length > 0 ? options.attributeName.trim() : DEFAULT_ATTRIBUTE_NAME,
-    revisionAttributeName: DEFAULT_REVISION_ATTRIBUTE_NAME,
-    revisionValue: resolveBuildCommitSha(),
     wrapLooseTextNodes: true,
     annotateLeafNodesOnly: true
   };

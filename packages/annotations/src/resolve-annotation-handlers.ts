@@ -1,6 +1,7 @@
 import type {
   AnnotationCreateThreadHandler,
   AnnotationDeleteThreadHandler,
+  AnnotationListCommitHistoryHandler,
   AnnotationListThreadsHandler,
   AnnotationMoveThreadAnchorHandler,
   AnnotationPlugin,
@@ -10,6 +11,7 @@ import type {
 
 export interface AnnotationCallbacks {
   onListThreads?: AnnotationListThreadsHandler;
+  onListCommitHistory?: AnnotationListCommitHistoryHandler;
   onCreateThread?: AnnotationCreateThreadHandler;
   onReplyToThread?: AnnotationReplyThreadHandler;
   onResolveThread?: AnnotationThreadActionHandler;
@@ -21,6 +23,7 @@ export interface AnnotationCallbacks {
 export interface ResolvedAnnotationHandlers {
   pluginId: string;
   listThreads?: AnnotationListThreadsHandler;
+  listCommitHistory?: AnnotationListCommitHistoryHandler;
   createThread?: AnnotationCreateThreadHandler;
   replyToThread?: AnnotationReplyThreadHandler;
   resolveThread?: AnnotationThreadActionHandler;
@@ -37,6 +40,7 @@ export function resolveAnnotationHandlers(
     return {
       pluginId: plugin.id,
       listThreads: plugin.listThreads,
+      listCommitHistory: plugin.listCommitHistory,
       createThread: plugin.createThread,
       replyToThread: plugin.replyToThread,
       resolveThread: plugin.resolveThread,
@@ -48,6 +52,7 @@ export function resolveAnnotationHandlers(
 
   if (
     callbacks.onListThreads ||
+    callbacks.onListCommitHistory ||
     callbacks.onCreateThread ||
     callbacks.onReplyToThread ||
     callbacks.onResolveThread ||
@@ -58,6 +63,7 @@ export function resolveAnnotationHandlers(
     return {
       pluginId: "custom-callbacks",
       listThreads: callbacks.onListThreads,
+      listCommitHistory: callbacks.onListCommitHistory,
       createThread: callbacks.onCreateThread,
       replyToThread: callbacks.onReplyToThread,
       resolveThread: callbacks.onResolveThread,

@@ -58,6 +58,11 @@ export interface AnnotationAnchor {
   };
   scrollChain: AnnotationScrollChainNode[];
   linkedElement?: AnnotationLinkedElement;
+  presentation?: {
+    mode: "attached" | "detached";
+    offsetX?: number;
+    offsetY?: number;
+  };
 }
 
 export interface AnnotationMessage {
@@ -140,10 +145,27 @@ export interface AnnotationDeleteThreadInput {
   commitSha: string;
 }
 
+export interface AnnotationCommitHistoryEntry {
+  commitSha: string;
+  threads: number;
+  comments: number;
+  latestUpdatedAt: string;
+  message?: string;
+  htmlUrl?: string;
+  branches?: string[];
+}
+
+export interface AnnotationListCommitHistoryInput {}
+
 export type AnnotationListThreadsHandler = (
   input: AnnotationListThreadsInput,
   context: AnnotationPluginContext
 ) => Promise<AnnotationThread[]> | AnnotationThread[];
+
+export type AnnotationListCommitHistoryHandler = (
+  input: AnnotationListCommitHistoryInput,
+  context: AnnotationPluginContext
+) => Promise<AnnotationCommitHistoryEntry[]> | AnnotationCommitHistoryEntry[];
 
 export type AnnotationCreateThreadHandler = (
   input: AnnotationCreateThreadInput,
@@ -173,6 +195,7 @@ export type AnnotationDeleteThreadHandler = (
 export interface AnnotationPlugin {
   id: string;
   listThreads: AnnotationListThreadsHandler;
+  listCommitHistory?: AnnotationListCommitHistoryHandler;
   createThread: AnnotationCreateThreadHandler;
   replyToThread: AnnotationReplyThreadHandler;
   resolveThread: AnnotationThreadActionHandler;

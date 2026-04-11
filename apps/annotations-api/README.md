@@ -7,7 +7,6 @@ Backend for Deshlo live annotations and customer onboarding.
 - GitHub OAuth login and JWT user auth
 - Self-serve projects and API keys per user
 - API-key authenticated annotation thread endpoints
-- Internal admin-token endpoints kept for bootstrap/support
 
 ## Run locally
 
@@ -26,6 +25,7 @@ cp .env.example .env
 Required in `.env`:
 
 - `DESHLO_JWT_SECRET`
+- `DESHLO_TOKEN_ENCRYPTION_KEY` (16/24/32-byte key, raw/base64/hex)
 - `GITHUB_CLIENT_ID`
 - `GITHUB_CLIENT_SECRET`
 - `GITHUB_REDIRECT_URL` (default: `http://localhost:8080/v1/auth/github/callback`)
@@ -43,9 +43,6 @@ make run-env
 
 - `GET /v1/auth/github/start`
 - `GET /v1/auth/github/callback`
-- `POST /v1/auth/logout`
-- `GET /v1/me`
-- `GET /v1/github/repos`
 
 OAuth scope includes repository access so users can pick a real GitHub repo for each project.
 
@@ -53,23 +50,21 @@ User-authenticated endpoints use:
 
 - `Authorization: Bearer <jwt>`
 
-### Projects / Keys (user-scoped)
+### Account (user-scoped)
 
-- `GET /v1/projects`
-- `GET /v1/keys`
-- `POST /v1/keys` (requires `repoFullName`, e.g. `owner/repo`; project is auto-assigned/created)
-- `DELETE /v1/keys/{keyID}`
-
-Legacy compatibility endpoints:
-
-- `GET /v1/projects/{projectID}/keys`
-- `POST /v1/projects/{projectID}/keys`
-- `POST /v1/projects/{projectID}/keys/{keyID}/revoke`
+- `GET /v1/account/me`
+- `POST /v1/account/logout`
+- `GET /v1/account/repos`
+- `GET /v1/account/projects`
+- `GET /v1/account/keys`
+- `POST /v1/account/keys` (requires `repoFullName`, e.g. `owner/repo`; project is auto-assigned/created)
+- `DELETE /v1/account/keys/{keyID}`
 
 ### Annotation runtime (project API key)
 
-- `POST /v1/projects/resolve`
+- `POST /v1/annotations/resolve`
 - `GET /v1/threads?pageKey=<url>&commitSha=<sha>&includeStale=true|false&environment=<env>`
+- `GET /v1/commit-history?pageKey=<url>&environment=<env>` (`warningCode` may be `GITHUB_REAUTH_REQUIRED`)
 - `POST /v1/threads`
 - `POST /v1/threads/{threadID}/replies`
 - `POST /v1/threads/{threadID}/resolve`
@@ -78,19 +73,6 @@ Legacy compatibility endpoints:
 Runtime auth header:
 
 - `X-Deshlo-API-Key: pk_...`
-
-## Internal admin API (compatibility)
-
-These remain enabled for internal ops and are not the client onboarding path:
-
-- `GET /v1/admin/projects`
-- `POST /v1/admin/projects`
-- `GET /v1/admin/projects/{projectID}/keys`
-- `POST /v1/admin/projects/{projectID}/keys`
-
-Header:
-
-- `X-Deshlo-Admin-Token: <DESHLO_ADMIN_TOKEN>`
 
 ## Development
 

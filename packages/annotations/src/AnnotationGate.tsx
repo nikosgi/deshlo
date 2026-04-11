@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   buildAnnotationPageKey,
   toAnnotationErrorResult,
   type AnnotationActionResult,
+  type AnnotationAnchor,
   type AnnotationCreateThreadHandler,
   type AnnotationDeleteThreadHandler,
+  type AnnotationListCommitHistoryHandler,
   type AnnotationListThreadsHandler,
   type AnnotationMoveThreadAnchorHandler,
   type AnnotationPoint,
@@ -30,8 +32,10 @@ import { isKnownCommitSha } from "./commit";
 import AnnotationBubbles from "./AnnotationBubbles";
 import AnnotationPanel, { type AnnotationPanelProps } from "./AnnotationPanel";
 
-const DEFAULT_REVISION_ATTRIBUTE_NAME = "data-src-rev";
 const DEFAULT_TRIGGER_KEY: AnnotationTriggerKey = "alt";
+const DEFAULT_COMMIT_ATTRIBUTE_NAME = "data-deshlo-commit";
+const DEFAULT_COMMIT_META_NAME = "deshlo:commit";
+const DEFAULT_COMMIT_WINDOW_KEY = "__DESHLO_COMMIT_SHA__";
 const DESHLO_NAV_EVENT = "deshlo:navigation";
 const DESHLO_HISTORY_PATCHED_FLAG = "__deshloHistoryPatched";
 type RuntimeIdentity = {
@@ -46,7 +50,10 @@ const UNKNOWN_IDENTITY: RuntimeIdentity = {
   commitSha: "unknown",
 };
 
-function isTriggerPressed(event: MouseEvent, triggerKey: AnnotationTriggerKey): boolean {
+function isTriggerPressed(
+  event: Pick<MouseEvent, "altKey" | "shiftKey" | "metaKey" | "ctrlKey">,
+  triggerKey: AnnotationTriggerKey
+): boolean {
   switch (triggerKey) {
     case "alt":
       return event.altKey;
@@ -61,30 +68,68 @@ function isTriggerPressed(event: MouseEvent, triggerKey: AnnotationTriggerKey): 
   }
 }
 
-function resolveCurrentCommitSha(): string {
+function normalizeCommitSha(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized || normalized === "unknown") {
+    return null;
+  }
+
+  return normalized;
+}
+
+function resolveCurrentCommitSha(preferredCommitSha?: string): string {
+  const configuredCommitSha = normalizeCommitSha(preferredCommitSha);
+  if (configuredCommitSha) {
+    return configuredCommitSha;
+  }
+
+  if (typeof window !== "undefined") {
+    const globalCommitSha = normalizeCommitSha(
+      (window as Window & { [DEFAULT_COMMIT_WINDOW_KEY]?: string })[DEFAULT_COMMIT_WINDOW_KEY]
+    );
+    if (globalCommitSha) {
+      return globalCommitSha;
+    }
+  }
+
   if (typeof document === "undefined") {
     return "unknown";
   }
 
-  const element = document.querySelector(`[${DEFAULT_REVISION_ATTRIBUTE_NAME}]`) as HTMLElement | null;
-  const value = element?.getAttribute(DEFAULT_REVISION_ATTRIBUTE_NAME)?.trim();
+  const domCommitCandidates = [
+    document.documentElement.getAttribute(DEFAULT_COMMIT_ATTRIBUTE_NAME),
+    document.body?.getAttribute(DEFAULT_COMMIT_ATTRIBUTE_NAME),
+    document
+      .querySelector(`meta[name='${DEFAULT_COMMIT_META_NAME}']`)
+      ?.getAttribute("content"),
+  ];
 
-  if (!value || value === "unknown") {
-    return "unknown";
+  for (const candidate of domCommitCandidates) {
+    const commitSha = normalizeCommitSha(candidate);
+    if (commitSha) {
+      return commitSha;
+    }
   }
 
-  return value;
+  return "unknown";
 }
 
-function resolveRuntimeIdentity(): RuntimeIdentity {
+function resolveRuntimeIdentity(preferredCommitSha?: string): RuntimeIdentity {
   if (typeof window === "undefined") {
-    return UNKNOWN_IDENTITY;
+    return {
+      ...UNKNOWN_IDENTITY,
+      commitSha: resolveCurrentCommitSha(preferredCommitSha),
+    };
   }
 
   return {
     pageKey: buildAnnotationPageKey(window.location),
     host: window.location.host,
-    commitSha: resolveCurrentCommitSha(),
+    commitSha: resolveCurrentCommitSha(preferredCommitSha),
   };
 }
 
@@ -137,7 +182,9 @@ export interface AnnotationGateProps extends AnnotationPanelProps {
   projectId?: string;
   environment?: string;
   author?: string;
+  commitSha?: string;
   onListThreads?: AnnotationListThreadsHandler;
+  onListCommitHistory?: AnnotationListCommitHistoryHandler;
   onCreateThread?: AnnotationCreateThreadHandler;
   onReplyToThread?: AnnotationReplyThreadHandler;
   onResolveThread?: AnnotationThreadActionHandler;
@@ -153,7 +200,13 @@ export default function AnnotationGate({
   projectId,
   environment,
   author,
+  commitSha,
+  githubToken,
+  githubHostConfig,
+  githubBranch,
+  githubBranchesLimit,
   onListThreads,
+  onListCommitHistory,
   onCreateThread,
   onReplyToThread,
   onResolveThread,
@@ -169,6 +222,7 @@ export default function AnnotationGate({
   const wrapperPlugin = useAnnotationPlugin();
   const handlers = resolveAnnotationHandlers(wrapperPlugin, {
     onListThreads,
+    onListCommitHistory,
     onCreateThread,
     onReplyToThread,
     onResolveThread,
@@ -183,9 +237,21 @@ export default function AnnotationGate({
   const [threads, setThreads] = useState<AnnotationThread[]>([]);
   const [showStale, setShowStale] = useState(false);
   const [draft, setDraft] = useState<AnnotationContextValue["draft"]>(null);
+  const [previewHighlightRect, setPreviewHighlightRect] = useState<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [threadPositions, setThreadPositions] = useState<AnnotationContextValue["threadPositions"]>({});
+  const pointerPointRef = useRef<AnnotationPoint | null>(null);
   // Keep first render deterministic for SSR hydration; resolve real runtime identity after mount.
-  const [identity, setIdentity] = useState(UNKNOWN_IDENTITY);
+  const [identity, setIdentity] = useState<RuntimeIdentity>(() =>
+    resolveRuntimeIdentity(commitSha)
+  );
+  const [selectedCommitSha, setSelectedCommitSha] = useState<string>(
+    resolveRuntimeIdentity(commitSha).commitSha
+  );
 
   const pageKey = identity.pageKey;
   const host = identity.host;
@@ -193,9 +259,13 @@ export default function AnnotationGate({
   const readOnly = !isKnownCommitSha(currentCommitSha);
 
   const groupedThreads = useMemo(
-    () => groupThreadsByRevision(threads, currentCommitSha),
-    [threads, currentCommitSha]
+    () => groupThreadsByRevision(threads, selectedCommitSha),
+    [threads, selectedCommitSha]
   );
+
+  useEffect(() => {
+    setSelectedCommitSha(currentCommitSha);
+  }, [currentCommitSha, pageKey]);
 
   async function refreshThreads(): Promise<void> {
     if (!pageKey || pageKey === "unknown://unknown") {
@@ -245,7 +315,7 @@ export default function AnnotationGate({
         cancelAnimationFrame(syncFrame);
       }
       syncFrame = requestAnimationFrame(() => {
-        setIdentity(resolveRuntimeIdentity());
+        setIdentity(resolveRuntimeIdentity(commitSha));
       });
     };
 
@@ -270,7 +340,7 @@ export default function AnnotationGate({
       window.removeEventListener("hashchange", onNavigation);
       window.removeEventListener(DESHLO_NAV_EVENT, onNavigation);
     };
-  }, [annotationEnabled, handlers.pluginId, pageKey, currentCommitSha]);
+  }, [annotationEnabled, handlers.pluginId, pageKey, currentCommitSha, commitSha]);
 
   useEffect(() => {
     // Hide previous-page bubbles immediately while reloading the new page threads.
@@ -329,6 +399,104 @@ export default function AnnotationGate({
 
   useEffect(() => {
     if (!annotationEnabled) {
+      setPreviewHighlightRect(null);
+      return;
+    }
+
+    let frame = 0;
+    let triggerActive = false;
+
+    const clearPreview = () => {
+      setPreviewHighlightRect(null);
+    };
+
+    const recompute = () => {
+      if (frame) {
+        cancelAnimationFrame(frame);
+      }
+
+      frame = requestAnimationFrame(() => {
+        if (!triggerActive || !pointerPointRef.current) {
+          clearPreview();
+          return;
+        }
+
+        const deepestTarget = resolveDeepestTargetAtPoint(pointerPointRef.current);
+        if (!deepestTarget) {
+          clearPreview();
+          return;
+        }
+
+        const rect = deepestTarget.getBoundingClientRect();
+        setPreviewHighlightRect({
+          x: rect.left,
+          y: rect.top,
+          width: rect.width,
+          height: rect.height,
+        });
+      });
+    };
+
+    const onMouseMove = (event: MouseEvent) => {
+      pointerPointRef.current = toPointFromMouseEvent(event);
+      triggerActive = isTriggerPressed(event, triggerKey);
+      if (!triggerActive) {
+        clearPreview();
+        return;
+      }
+      recompute();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      triggerActive = isTriggerPressed(event, triggerKey);
+      if (triggerActive) {
+        recompute();
+      }
+    };
+
+    const onKeyUp = (event: KeyboardEvent) => {
+      triggerActive = isTriggerPressed(event, triggerKey);
+      if (!triggerActive) {
+        clearPreview();
+        return;
+      }
+      recompute();
+    };
+
+    const onViewportChange = () => {
+      if (!triggerActive) {
+        return;
+      }
+      recompute();
+    };
+
+    const onBlur = () => {
+      triggerActive = false;
+      clearPreview();
+    };
+
+    window.addEventListener("mousemove", onMouseMove, true);
+    window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("keyup", onKeyUp, true);
+    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("scroll", onViewportChange, true);
+    window.addEventListener("blur", onBlur);
+
+    return () => {
+      if (frame) {
+        cancelAnimationFrame(frame);
+      }
+      window.removeEventListener("mousemove", onMouseMove, true);
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("keyup", onKeyUp, true);
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("scroll", onViewportChange, true);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [annotationEnabled, triggerKey]);
+
+  useEffect(() => {
+    if (!annotationEnabled) {
       return;
     }
 
@@ -374,6 +542,7 @@ export default function AnnotationGate({
         left: point.x + 8,
         body: "",
       });
+      setPreviewHighlightRect(null);
       setResult(null);
     };
 
@@ -585,7 +754,13 @@ export default function AnnotationGate({
     }
   }
 
-  async function moveThreadAnchor(threadId: string, point: AnnotationPoint): Promise<void> {
+  async function moveThreadAnchor(
+    threadId: string,
+    input: {
+      point: AnnotationPoint;
+      anchor?: AnnotationAnchor;
+    }
+  ): Promise<void> {
     if (readOnly) {
       setResult({
         ok: false,
@@ -606,13 +781,16 @@ export default function AnnotationGate({
       return;
     }
 
-    const deepestTarget = resolveDeepestTargetAtPoint(point);
-    if (!deepestTarget) {
-      setResult({ ok: false, message: "TARGET_NOT_FOUND: Could not resolve drop target element." });
-      return;
+    let nextAnchor: AnnotationAnchor | null = input.anchor ?? null;
+    if (!nextAnchor) {
+      const deepestTarget = resolveDeepestTargetAtPoint(input.point);
+      if (!deepestTarget) {
+        setResult({ ok: false, message: "TARGET_NOT_FOUND: Could not resolve drop target element." });
+        return;
+      }
+      nextAnchor = captureAnnotationAnchor(deepestTarget, input.point);
     }
 
-    const nextAnchor = captureAnnotationAnchor(deepestTarget, point);
     const previousAnchor = thread.anchor;
 
     setThreads((previous) =>
@@ -719,6 +897,7 @@ export default function AnnotationGate({
     pluginId: handlers.pluginId,
     pageKey,
     currentCommitSha,
+    selectedCommitSha,
     loading,
     submitting,
     result,
@@ -730,6 +909,10 @@ export default function AnnotationGate({
     threadPositions,
     refreshThreads,
     setShowStale,
+    setSelectedCommitSha: (value) => {
+      const normalized = value.trim();
+      setSelectedCommitSha(normalized || currentCommitSha);
+    },
     setDraftBody: (value) => {
       setDraft((previous) => (previous ? { ...previous, body: value } : previous));
       setResult(null);
@@ -747,9 +930,36 @@ export default function AnnotationGate({
   };
 
   return (
-    <AnnotationProvider value={contextValue}>
-      <AnnotationBubbles />
-      <AnnotationPanel width={width} />
-    </AnnotationProvider>
+    <>
+      {previewHighlightRect ? (
+        <div
+          data-deshlo-annotation-ui="1"
+          style={{
+            position: "fixed",
+            left: previewHighlightRect.x - 2,
+            top: previewHighlightRect.y - 2,
+            width: previewHighlightRect.width + 4,
+            height: previewHighlightRect.height + 4,
+            border: "2px solid #0ea5e9",
+            borderRadius: 6,
+            boxShadow: "0 0 0 2px rgba(14, 165, 233, 0.25)",
+            background: "rgba(14, 165, 233, 0.08)",
+            pointerEvents: "none",
+            zIndex: 9996,
+          }}
+        />
+      ) : null}
+      <AnnotationProvider value={contextValue}>
+        <AnnotationBubbles />
+        <AnnotationPanel
+          width={width}
+          githubToken={githubToken}
+          githubHostConfig={githubHostConfig}
+          githubBranch={githubBranch}
+          githubBranchesLimit={githubBranchesLimit}
+          listCommitHistory={handlers.listCommitHistory}
+        />
+      </AnnotationProvider>
+    </>
   );
 }

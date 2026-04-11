@@ -23,6 +23,7 @@ export interface AnnotationContextValue {
   pluginId: string;
   pageKey: string;
   currentCommitSha: string;
+  selectedCommitSha: string;
   loading: boolean;
   submitting: boolean;
   result: AnnotationActionResult | null;
@@ -34,13 +35,20 @@ export interface AnnotationContextValue {
   threadPositions: Record<string, ResolvedAnnotationPosition>;
   refreshThreads: () => Promise<void>;
   setShowStale: (value: boolean) => void;
+  setSelectedCommitSha: (value: string) => void;
   setDraftBody: (value: string) => void;
   submitDraft: () => Promise<void>;
   cancelDraft: () => void;
   replyToThread: (threadId: string, body: string) => Promise<void>;
   resolveThread: (threadId: string, commitSha: string) => Promise<void>;
   reopenThread: (threadId: string, commitSha: string) => Promise<void>;
-  moveThreadAnchor: (threadId: string, point: AnnotationPoint) => Promise<void>;
+  moveThreadAnchor: (
+    threadId: string,
+    input: {
+      point: AnnotationPoint;
+      anchor?: AnnotationAnchor;
+    }
+  ) => Promise<void>;
   deleteThread: (threadId: string, commitSha: string) => Promise<void>;
 }
 

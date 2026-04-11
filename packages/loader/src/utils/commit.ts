@@ -36,7 +36,9 @@ function resolveCommitFromGit(): string | null {
 }
 
 export function resolveBuildCommitSha(): string {
-  if (cachedCommitSha) {
+  const shouldCache = process.env.NODE_ENV === "production";
+
+  if (shouldCache && cachedCommitSha) {
     return cachedCommitSha;
   }
 
@@ -45,6 +47,8 @@ export function resolveBuildCommitSha(): string {
     resolveCommitFromGit() ??
     "unknown";
 
-  cachedCommitSha = resolved;
+  if (shouldCache) {
+    cachedCommitSha = resolved;
+  }
   return resolved;
 }

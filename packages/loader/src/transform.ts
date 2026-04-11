@@ -10,8 +10,6 @@ import { advanceLocation, splitMeaningfulText } from "./utils/text";
 
 export interface TransformOptions {
   attributeName: string;
-  revisionAttributeName: string;
-  revisionValue: string;
   wrapLooseTextNodes: boolean;
   annotateLeafNodesOnly: boolean;
 }
@@ -69,13 +67,8 @@ export function transformSource(
           t.isJSXAttribute(attribute) &&
           t.isJSXIdentifier(attribute.name, { name: options.attributeName })
       );
-      const hasRevisionAttribute = openingPath.node.attributes.some(
-        (attribute) =>
-          t.isJSXAttribute(attribute) &&
-          t.isJSXIdentifier(attribute.name, { name: options.revisionAttributeName })
-      );
 
-      if (hasSourceAttribute && hasRevisionAttribute) {
+      if (hasSourceAttribute) {
         return;
       }
 
@@ -85,16 +78,6 @@ export function transformSource(
       if (!hasSourceAttribute) {
         openingPath.node.attributes.push(
           t.jsxAttribute(t.jsxIdentifier(options.attributeName), t.stringLiteral(locationValue))
-        );
-        changed = true;
-      }
-
-      if (!hasRevisionAttribute) {
-        openingPath.node.attributes.push(
-          t.jsxAttribute(
-            t.jsxIdentifier(options.revisionAttributeName),
-            t.stringLiteral(options.revisionValue)
-          )
         );
         changed = true;
       }
@@ -151,10 +134,6 @@ export function transformSource(
           t.jsxElement(
             t.jsxOpeningElement(t.jsxIdentifier("span"), [
               t.jsxAttribute(t.jsxIdentifier(options.attributeName), t.stringLiteral(locationValue)),
-              t.jsxAttribute(
-                t.jsxIdentifier(options.revisionAttributeName),
-                t.stringLiteral(options.revisionValue)
-              ),
             ]),
             t.jsxClosingElement(t.jsxIdentifier("span")),
             [t.jsxText(parts.text)],

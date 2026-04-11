@@ -31,31 +31,67 @@ import {
 import { resolveSubmitHandler } from "./submit-handler";
 
 const DEFAULT_ATTRIBUTE_NAME = "data-src-loc";
-const DEFAULT_REVISION_ATTRIBUTE_NAME = "data-src-rev";
 const DEFAULT_TRIGGER_KEY: TriggerKey = "alt";
+const DEFAULT_COMMIT_ATTRIBUTE_NAME = "data-deshlo-commit";
+const DEFAULT_COMMIT_META_NAME = "deshlo:commit";
+const DEFAULT_COMMIT_WINDOW_KEY = "__DESHLO_COMMIT_SHA__";
 
-function resolveCurrentRevision(
-  selection: OverlaySelection | null,
-  attributeName: string
-): string | null {
-  if (selection?.commitSha && selection.commitSha !== "unknown") {
-    return selection.commitSha;
+function normalizeCommitSha(value: string | null | undefined): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized || normalized === "unknown") {
+    return null;
+  }
+
+  return normalized;
+}
+
+function resolveGlobalCommitSha(preferredCommitSha?: string): string | null {
+  const configuredCommitSha = normalizeCommitSha(preferredCommitSha);
+  if (configuredCommitSha) {
+    return configuredCommitSha;
+  }
+
+  if (typeof window !== "undefined") {
+    const windowCommitSha = normalizeCommitSha(
+      (window as Window & { [DEFAULT_COMMIT_WINDOW_KEY]?: string })[DEFAULT_COMMIT_WINDOW_KEY]
+    );
+    if (windowCommitSha) {
+      return windowCommitSha;
+    }
   }
 
   if (typeof document === "undefined") {
     return null;
   }
 
-  const revisionElement = document.querySelector(
-    `[${attributeName}][${DEFAULT_REVISION_ATTRIBUTE_NAME}]`
-  ) as HTMLElement | null;
-  const revisionValue = revisionElement?.getAttribute(DEFAULT_REVISION_ATTRIBUTE_NAME)?.trim();
+  const domCommitCandidates = [
+    document.documentElement.getAttribute(DEFAULT_COMMIT_ATTRIBUTE_NAME),
+    document.body?.getAttribute(DEFAULT_COMMIT_ATTRIBUTE_NAME),
+    document
+      .querySelector(`meta[name='${DEFAULT_COMMIT_META_NAME}']`)
+      ?.getAttribute("content"),
+  ];
 
-  if (!revisionValue || revisionValue === "unknown") {
-    return null;
+  for (const candidate of domCommitCandidates) {
+    const commitSha = normalizeCommitSha(candidate);
+    if (commitSha) {
+      return commitSha;
+    }
   }
 
-  return revisionValue;
+  return null;
+}
+
+function resolveCurrentRevision(selection: OverlaySelection | null, preferredCommitSha?: string): string | null {
+  if (selection?.commitSha && selection.commitSha !== "unknown") {
+    return selection.commitSha;
+  }
+
+  return resolveGlobalCommitSha(preferredCommitSha);
 }
 
 function isTriggerPressed(event: MouseEvent, triggerKey: TriggerKey): boolean {
@@ -142,6 +178,7 @@ export interface SourceInspectorProps {
   bubbleMode?: OverlayBubbleMode;
   attributeName?: string;
   triggerKey?: TriggerKey;
+  commitSha?: string;
   onSubmit?: OverlaySubmitHandler;
   onSubmitBatch?: OverlayBatchSubmitHandler;
   onSelectionChange?: (selection: OverlaySelection | null) => void;
@@ -156,6 +193,7 @@ export default function SourceInspector({
   bubbleMode = "staged",
   attributeName = DEFAULT_ATTRIBUTE_NAME,
   triggerKey = DEFAULT_TRIGGER_KEY,
+  commitSha,
   onSubmit,
   onSubmitBatch,
   onSelectionChange,
@@ -186,7 +224,7 @@ export default function SourceInspector({
   const [bubbleAnchors, setBubbleAnchors] = useState<Record<string, OverlayBubbleAnchor>>({});
   const [expandedBubbles, setExpandedBubbles] = useState<Record<string, boolean>>({});
 
-  const currentRevision = resolveCurrentRevision(selection, attributeName);
+  const currentRevision = resolveCurrentRevision(selection, commitSha);
   const highlightedElement = useRef<HTMLElement | null>(null);
 
   const stagedBySourceLoc = useMemo(() => {
@@ -202,7 +240,7 @@ export default function SourceInspector({
     sourceLoc: string,
     preferredProposedText?: string
   ): void {
-    const commitSha = element.getAttribute(DEFAULT_REVISION_ATTRIBUTE_NAME) || "unknown";
+    const resolvedCommitSha = resolveGlobalCommitSha(commitSha) ?? "unknown";
 
     if (highlightedElement.current) {
       highlightedElement.current.style.outline = "";
@@ -232,7 +270,7 @@ export default function SourceInspector({
       sourceLoc,
       tagName,
       selectedText,
-      commitSha,
+      commitSha: resolvedCommitSha,
     });
     setProposedTextState(preferredProposedText ?? stagedChange?.proposedText ?? selectedText);
 

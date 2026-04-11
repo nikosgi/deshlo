@@ -1,6 +1,8 @@
 import type {
   AnnotationActionResult,
+  AnnotationCommitHistoryEntry,
   AnnotationDeleteThreadInput,
+  AnnotationListCommitHistoryInput,
   AnnotationListThreadsInput,
   AnnotationMoveThreadAnchorInput,
   AnnotationPlugin,
@@ -29,6 +31,19 @@ function toQuery(input: AnnotationListThreadsInput, context: AnnotationPluginCon
   query.set("pageKey", context.pageKey);
   query.set("commitSha", context.commitSha);
   query.set("includeStale", input.includeStale ? "true" : "false");
+  if (environment || context.environment) {
+    query.set("environment", environment || context.environment || "");
+  }
+  return query.toString();
+}
+
+function toCommitHistoryQuery(
+  _input: AnnotationListCommitHistoryInput,
+  context: AnnotationPluginContext,
+  environment?: string
+): string {
+  const query = new URLSearchParams();
+  query.set("pageKey", context.pageKey);
   if (environment || context.environment) {
     query.set("environment", environment || context.environment || "");
   }
@@ -69,6 +84,30 @@ export function createHttpAnnotationsPlugin(config: HttpAnnotationsPluginConfig)
       }
 
       return body.threads || [];
+    },
+
+    async listCommitHistory(
+      input: AnnotationListCommitHistoryInput,
+      context: AnnotationPluginContext
+    ): Promise<AnnotationCommitHistoryEntry[]> {
+      if (!apiKey) {
+        throw new Error("AUTH_REQUIRED: API key is required.");
+      }
+
+      const response = await fetch(
+        `${baseUrl}/v1/commit-history?${toCommitHistoryQuery(input, context, config.environment)}`,
+        {
+          method: "GET",
+          headers: createHeaders(apiKey),
+        }
+      );
+
+      const body = (await response.json().catch(() => ({}))) as any;
+      if (!response.ok || body?.ok === false) {
+        throw new Error(body?.message || `Failed to list commit history (${response.status}).`);
+      }
+
+      return body.commits || [];
     },
 
     async createThread(input: AnnotationCreateThreadInput): Promise<AnnotationActionResult> {

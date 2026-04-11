@@ -1,7 +1,6 @@
 export {
   buildSourceInspectorLoaderOptions,
   DEFAULT_ATTRIBUTE_NAME,
-  DEFAULT_REVISION_ATTRIBUTE_NAME,
   injectSourceInspectorLoader,
   isSourceInspectorEnabled,
   resolveIncludePaths,
@@ -43,9 +42,12 @@ export type {
 export type {
   AnnotationActionResult,
   AnnotationAnchor,
+  AnnotationCommitHistoryEntry,
   AnnotationContainerFingerprint,
   AnnotationCreateThreadHandler,
   AnnotationCreateThreadInput,
+  AnnotationListCommitHistoryHandler,
+  AnnotationListCommitHistoryInput,
   AnnotationListThreadsHandler,
   AnnotationListThreadsInput,
   AnnotationMessage,

@@ -132,10 +132,10 @@ export default function Page() {
     setError(null);
 
     try {
-      const me = await apiFetch<{ user: User }>("/v1/me", activeToken);
+      const me = await apiFetch<{ user: User }>("/v1/account/me", activeToken);
       setUser(me.user);
 
-      const reposResult = await apiFetch<{ repos: GitHubRepo[] }>("/v1/github/repos", activeToken);
+      const reposResult = await apiFetch<{ repos: GitHubRepo[] }>("/v1/account/repos", activeToken);
       const nextRepos = reposResult.repos || [];
       setRepos(nextRepos);
       setSelectedRepoFullName((current) => {
@@ -145,7 +145,7 @@ export default function Page() {
         return nextRepos[0]?.fullName || "";
       });
 
-      const keysResult = await apiFetch<{ keys: ApiKeyRecord[] }>("/v1/keys", activeToken);
+      const keysResult = await apiFetch<{ keys: ApiKeyRecord[] }>("/v1/account/keys", activeToken);
       setKeys(keysResult.keys || []);
     } catch (nextError) {
       const message = toErrorMessage(nextError);
@@ -173,7 +173,7 @@ export default function Page() {
 
     if (activeToken) {
       try {
-        await apiFetch<{ ok: boolean }>("/v1/auth/logout", activeToken, { method: "POST" });
+        await apiFetch<{ ok: boolean }>("/v1/account/logout", activeToken, { method: "POST" });
       } catch {
         // ignore logout call errors
       }
@@ -203,7 +203,7 @@ export default function Page() {
     setError(null);
 
     try {
-      const result = await apiFetch<{ key: CreatedApiKey }>("/v1/keys", token, {
+      const result = await apiFetch<{ key: CreatedApiKey }>("/v1/account/keys", token, {
         method: "POST",
         body: JSON.stringify({ repoFullName }),
       });
@@ -225,7 +225,7 @@ export default function Page() {
     setError(null);
 
     try {
-      await apiFetch<{ ok: boolean }>(`/v1/keys/${keyId}`, token, {
+      await apiFetch<{ ok: boolean }>(`/v1/account/keys/${keyId}`, token, {
         method: "DELETE",
       });
       await refreshAll(token);

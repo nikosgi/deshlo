@@ -4,8 +4,7 @@ import generate from "@babel/generator";
 import traverse from "@babel/traverse";
 import * as t from "@babel/types";
 
-import { resolveBuildCommitSha } from "./revision";
-import { DEFAULT_ATTRIBUTE_NAME, DEFAULT_REVISION_ATTRIBUTE_NAME } from "./shared";
+import { DEFAULT_ATTRIBUTE_NAME } from "./shared";
 
 export interface InjectSourceAttributesOptions {
   attributeName?: string;
@@ -99,7 +98,6 @@ export function injectSourceAttributes(
     typeof options.attributeName === "string" && options.attributeName.trim().length > 0
       ? options.attributeName.trim()
       : DEFAULT_ATTRIBUTE_NAME;
-  const revisionValue = resolveBuildCommitSha();
 
   if (typeof source !== "string" || !source.includes("<")) {
     return { code: source, map: null, changed: false };
@@ -156,13 +154,8 @@ export function injectSourceAttributes(
           t.isJSXAttribute(attribute) &&
           t.isJSXIdentifier(attribute.name, { name: attributeName })
       );
-      const hasRevisionAttribute = openingPath.node.attributes.some(
-        (attribute) =>
-          t.isJSXAttribute(attribute) &&
-          t.isJSXIdentifier(attribute.name, { name: DEFAULT_REVISION_ATTRIBUTE_NAME })
-      );
 
-      if (hasSourceAttribute && hasRevisionAttribute) {
+      if (hasSourceAttribute) {
         return;
       }
 
@@ -172,16 +165,6 @@ export function injectSourceAttributes(
       if (!hasSourceAttribute) {
         openingPath.node.attributes.push(
           t.jsxAttribute(t.jsxIdentifier(attributeName), t.stringLiteral(locationValue))
-        );
-        changed = true;
-      }
-
-      if (!hasRevisionAttribute) {
-        openingPath.node.attributes.push(
-          t.jsxAttribute(
-            t.jsxIdentifier(DEFAULT_REVISION_ATTRIBUTE_NAME),
-            t.stringLiteral(revisionValue)
-          )
         );
         changed = true;
       }
@@ -239,10 +222,6 @@ export function injectSourceAttributes(
           t.jsxElement(
             t.jsxOpeningElement(t.jsxIdentifier("span"), [
               t.jsxAttribute(t.jsxIdentifier(attributeName), t.stringLiteral(locationValue)),
-              t.jsxAttribute(
-                t.jsxIdentifier(DEFAULT_REVISION_ATTRIBUTE_NAME),
-                t.stringLiteral(revisionValue)
-              ),
             ]),
             t.jsxClosingElement(t.jsxIdentifier("span")),
             [t.jsxText(parts.text)],

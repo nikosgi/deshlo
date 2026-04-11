@@ -15,6 +15,10 @@ export interface ResolvedAnnotationPosition {
   left: number;
 }
 
+export const BUBBLE_SIZE = 24;
+export const BUBBLE_RADIUS = BUBBLE_SIZE / 2;
+const BUBBLE_EDGE_MARGIN = 8;
+
 function toClassTokens(value: string): string[] {
   return value
     .split(/\s+/)
@@ -119,8 +123,16 @@ function toRelativeOffset(element: HTMLElement, point: AnnotationPoint): Annotat
 
 function toBubblePosition(point: AnnotationPoint): AnnotationPoint {
   return {
-    x: clamp(point.x + 8, 8, Math.max(window.innerWidth - 32, 8)),
-    y: clamp(point.y + 8, 8, Math.max(window.innerHeight - 32, 8)),
+    x: clamp(
+      point.x - BUBBLE_RADIUS,
+      BUBBLE_EDGE_MARGIN,
+      Math.max(window.innerWidth - BUBBLE_SIZE - BUBBLE_EDGE_MARGIN, BUBBLE_EDGE_MARGIN)
+    ),
+    y: clamp(
+      point.y - BUBBLE_RADIUS,
+      BUBBLE_EDGE_MARGIN,
+      Math.max(window.innerHeight - BUBBLE_SIZE - BUBBLE_EDGE_MARGIN, BUBBLE_EDGE_MARGIN)
+    ),
   };
 }
 
@@ -328,10 +340,28 @@ function resolveFromViewport(anchor: AnnotationAnchor): ResolvedAnnotationPositi
   };
 }
 
+function applyPresentationOffset(
+  base: ResolvedAnnotationPosition,
+  anchor: AnnotationAnchor
+): ResolvedAnnotationPosition {
+  if (anchor.presentation?.mode !== "detached") {
+    return base;
+  }
+
+  const offsetX = Number.isFinite(anchor.presentation.offsetX) ? Number(anchor.presentation.offsetX) : 0;
+  const offsetY = Number.isFinite(anchor.presentation.offsetY) ? Number(anchor.presentation.offsetY) : 0;
+
+  return {
+    ...base,
+    left: base.left + offsetX,
+    top: base.top + offsetY,
+  };
+}
+
 export function resolveAnnotationPosition(anchor: AnnotationAnchor): ResolvedAnnotationPosition {
   const byContainer = resolveFromScrollChain(anchor);
   if (byContainer) {
-    return byContainer;
+    return applyPresentationOffset(byContainer, anchor);
   }
 
   if (anchor.scrollChain.length > 0) {
@@ -343,7 +373,7 @@ export function resolveAnnotationPosition(anchor: AnnotationAnchor): ResolvedAnn
     };
   }
 
-  return resolveFromViewport(anchor);
+  return applyPresentationOffset(resolveFromViewport(anchor), anchor);
 }
 
 export function resolveThreadPositions(
@@ -401,6 +431,39 @@ export function resolveLinkedElementCenter(anchor: AnnotationAnchor): Annotation
     x: rect.left + rect.width / 2,
     y: rect.top + rect.height / 2,
   };
+}
+
+export function resolveAnchorTargetPoint(anchor: AnnotationAnchor): AnnotationPoint | null {
+  if (typeof window === "undefined") {
+    return anchor.targetPoint || null;
+  }
+
+  if (anchor.scrollChain.length > 0) {
+    const nearest = anchor.scrollChain[0];
+    const container = findElementByFingerprint(nearest.fingerprint);
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      return {
+        x: rect.left + nearest.offsetX - container.scrollLeft,
+        y: rect.top + nearest.offsetY - container.scrollTop,
+      };
+    }
+  }
+
+  const viewportX = anchor.normalized?.viewportXRatio;
+  const viewportY = anchor.normalized?.viewportYRatio;
+  if (Number.isFinite(viewportX) && Number.isFinite(viewportY)) {
+    return {
+      x: Number(viewportX) * window.innerWidth,
+      y: Number(viewportY) * window.innerHeight,
+    };
+  }
+
+  if (anchor.targetPoint) {
+    return anchor.targetPoint;
+  }
+
+  return null;
 }
 
 export function formatLinkedElementLabel(anchor: AnnotationAnchor): string {

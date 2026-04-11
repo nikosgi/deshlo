@@ -1,6 +1,5 @@
-import { DEFAULT_ATTRIBUTE_NAME, DEFAULT_REVISION_ATTRIBUTE_NAME } from "./constants";
+import { DEFAULT_ATTRIBUTE_NAME } from "./constants";
 import { transformSource } from "./transform";
-import { resolveBuildCommitSha } from "./utils/commit";
 
 interface LoaderOptions {
   attributeName?: string;
@@ -22,8 +21,6 @@ function normalizeOptions(options: LoaderOptions) {
       typeof options.attributeName === "string" && options.attributeName.trim().length > 0
         ? options.attributeName.trim()
         : DEFAULT_ATTRIBUTE_NAME,
-    revisionAttributeName: DEFAULT_REVISION_ATTRIBUTE_NAME,
-    revisionValue: resolveBuildCommitSha(),
     wrapLooseTextNodes: true,
     annotateLeafNodesOnly: true,
   };

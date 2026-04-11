@@ -14,8 +14,8 @@
     "build:test-app": "yarn workspace @deshlo/next-test-app build",
     "dev:react-sample": "yarn workspace @deshlo/react-sample-app dev",
     "build:react-sample": "yarn workspace @deshlo/react-sample-app build",
-    "dev:admin-app": "yarn workspace @deshlo/admin-app dev",
-    "build:admin-app": "yarn workspace @deshlo/admin-app build"
+    "dev:dashboard": "yarn workspace @deshlo/dashboard dev",
+    "build:dashboard": "yarn workspace @deshlo/dashboard build"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

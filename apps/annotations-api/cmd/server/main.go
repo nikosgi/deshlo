@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,23 +10,35 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/deshlo/annotations-api/internal/config"
-	"github.com/deshlo/annotations-api/internal/httpapi"
-	"github.com/deshlo/annotations-api/internal/migrate"
-	"github.com/deshlo/annotations-api/internal/store"
-	"github.com/jackc/pgx/v5/pgxpool"
+	accountapp "github.com/deshlo/annotations-api/internal/modules/account/application"
+	accounthttp "github.com/deshlo/annotations-api/internal/modules/account/http"
+	accountinfra "github.com/deshlo/annotations-api/internal/modules/account/infra"
+	annotationsapp "github.com/deshlo/annotations-api/internal/modules/annotations/application"
+	annotationshttp "github.com/deshlo/annotations-api/internal/modules/annotations/http"
+	annotationsinfra "github.com/deshlo/annotations-api/internal/modules/annotations/infra"
+	authapp "github.com/deshlo/annotations-api/internal/modules/auth/application"
+	authhttp "github.com/deshlo/annotations-api/internal/modules/auth/http"
+	authinfra "github.com/deshlo/annotations-api/internal/modules/auth/infra"
+	githubinfra "github.com/deshlo/annotations-api/internal/modules/github/infra"
+	platformconfig "github.com/deshlo/annotations-api/internal/platform/config"
+	platformdb "github.com/deshlo/annotations-api/internal/platform/db"
+	platformmigrate "github.com/deshlo/annotations-api/internal/platform/db/migrate"
+	"github.com/deshlo/annotations-api/internal/platform/middleware"
+	"github.com/deshlo/annotations-api/internal/platform/observability"
+	platformsecurity "github.com/deshlo/annotations-api/internal/platform/security"
+	platformserver "github.com/deshlo/annotations-api/internal/platform/server"
 )
 
 func main() {
-	logger := log.New(os.Stdout, "[annotations-api] ", log.LstdFlags|log.Lmsgprefix)
+	logger := observability.NewLogger()
 
-	cfg, err := config.Load()
+	cfg, err := platformconfig.Load()
 	if err != nil {
 		logger.Fatalf("load config: %v", err)
 	}
 
 	ctx := context.Background()
-	db, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	db, err := platformdb.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Fatalf("connect postgres: %v", err)
 	}
@@ -38,25 +49,47 @@ func main() {
 	}
 
 	if cfg.MigrateOnStart {
-		if err := migrate.Apply(ctx, db, "migrations"); err != nil {
+		if err := platformmigrate.Apply(ctx, db, "migrations"); err != nil {
 			logger.Fatalf("apply migrations: %v", err)
 		}
 		logger.Printf("migrations applied")
 	}
 
-	st := store.New(db)
-	api := httpapi.New(st, logger, cfg.AdminToken, httpapi.GitHubOAuthConfig{
-		ClientID:     cfg.GitHubClientID,
-		ClientSecret: cfg.GitHubClientSecret,
-		RedirectURL:  cfg.GitHubRedirectURL,
+	tokenCipher, err := platformsecurity.NewTokenCipher(cfg.TokenEncryptionKey)
+	if err != nil {
+		logger.Fatalf("initialize token cipher: %v", err)
+	}
+
+	githubClient := githubinfra.NewClient(cfg.GitHubClientID, cfg.GitHubClientSecret, cfg.GitHubRedirectURL)
+
+	authRepo := authinfra.NewUserRepository(db, tokenCipher)
+	accountRepo := accountinfra.NewRepository(db)
+	annotationsRepo := annotationsinfra.NewRepository(db)
+
+	authService := authapp.NewService(authRepo, githubClient, authapp.OAuthConfig{
 		DashboardURL: cfg.DashboardURL,
 		JWTSecret:    cfg.JWTSecret,
 		JWTTTL:       time.Duration(cfg.JWTTTLSeconds) * time.Second,
-	})
+	}, logger)
+	accountService := accountapp.NewService(accountRepo, authService, githubClient, logger)
+	annotationsService := annotationsapp.NewService(annotationsRepo, authService, githubClient, logger)
+
+	authHandler := authhttp.NewHandler(authService)
+	accountHandler := accounthttp.NewHandler(accountService)
+	annotationsHandler := annotationshttp.NewHandler(annotationsService)
+
+	userAuthMiddleware := middleware.NewUserAuth(cfg.JWTSecret, authService, logger)
+	apiKeyAuthMiddleware := middleware.NewAPIKeyAuth(annotationsRepo, logger)
 
 	httpServer := &http.Server{
-		Addr:              ":" + strconv.Itoa(cfg.Port),
-		Handler:           api.Handler(),
+		Addr: ":" + strconv.Itoa(cfg.Port),
+		Handler: platformserver.NewHandler(platformserver.RouterConfig{
+			AuthHandler:        authHandler,
+			AccountHandler:     accountHandler,
+			AnnotationsHandler: annotationsHandler,
+			RequireUser:        userAuthMiddleware,
+			RequireAPIKey:      apiKeyAuthMiddleware,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
