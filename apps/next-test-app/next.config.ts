@@ -19,17 +19,17 @@ module.exports = {
   //   });
   //   return config
   // },
-  turbopack: {
-    rules: {
-      "*": {
-        condition: {
-          all: [
-            { not: "foreign" },
-            { path: /\.(?:[tj]sx?)$/ }, // .js .jsx .ts .tsx
-          ],
-        },
-        loaders: ["@deshlo/loader"],
-      },
-    },
-  }
+  // turbopack: {
+  //   rules: {
+  //     "*": {
+  //       condition: {
+  //         all: [
+  //           { not: "foreign" },
+  //           { path: /\.(?:[tj]sx?)$/ }, // .js .jsx .ts .tsx
+  //         ],
+  //       },
+  //       loaders: ["@deshlo/loader"],
+  //     },
+  //   },
+  // }
 };

@@ -1,0 +1,50 @@
+{
+  "name": "@deshlo/annotations",
+  "version": "0.1.1",
+  "description": "Commit-scoped live annotation runtime for React",
+  "main": "build/src/index.js",
+  "module": "build/src/index.js",
+  "types": "build/src/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./build/src/index.d.ts",
+      "require": "./build/src/index.js",
+      "import": "./build/src/index.js"
+    },
+    "./github": {
+      "types": "./build/src/github.d.ts",
+      "require": "./build/src/github.js",
+      "import": "./build/src/github.js"
+    }
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "clean": "rm -rf build",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "react",
+    "annotations",
+    "overlay",
+    "review"
+  ],
+  "author": "Nikos Gerontakis",
+  "license": "MIT",
+  "dependencies": {
+    "@deshlo/core": "0.1.1",
+    "@deshlo/plugin-github-annotations": "0.1.1"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2",
+    "vitest": "^3.2.4"
+  }
+}

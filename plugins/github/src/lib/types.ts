@@ -40,6 +40,7 @@ export interface CreateDraftPrSuccess {
   commitSha: string;
   prNumber: number;
   prUrl: string;
+  affectedCount?: number;
 }
 
 export interface ActionFailure {

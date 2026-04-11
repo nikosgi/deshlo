@@ -11,6 +11,10 @@ export interface OverlaySubmitInput extends OverlaySelection {
   proposedText: string;
 }
 
+export interface OverlayBatchSubmitInput {
+  changes: OverlaySubmitInput[];
+}
+
 export interface OverlayProposedChange {
   changeId: string;
   sourceLoc: string;
@@ -37,6 +41,10 @@ export interface OverlaySubmitResult {
   links?: OverlayResultLink[];
 }
 
+export interface OverlayBatchSubmitResult extends OverlaySubmitResult {
+  submittedCount: number;
+}
+
 export interface OverlayPluginContext {
   host: string;
 }
@@ -50,9 +58,15 @@ export type OverlayListProposedChangesHandler = (
   context: OverlayPluginContext
 ) => Promise<OverlayProposedChange[]> | OverlayProposedChange[];
 
+export type OverlayBatchSubmitHandler = (
+  input: OverlayBatchSubmitInput,
+  context: OverlayPluginContext
+) => Promise<OverlayBatchSubmitResult> | OverlayBatchSubmitResult;
+
 export interface OverlayPlugin {
   id: string;
   submit: OverlaySubmitHandler;
+  submitBatch?: OverlayBatchSubmitHandler;
   listProposedChanges?: OverlayListProposedChangesHandler;
 }
 

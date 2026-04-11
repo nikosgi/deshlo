@@ -9,6 +9,7 @@ export interface OverlayGatePanelProps {
 export default function OverlayGatePanel({ width = 420 }: OverlayGatePanelProps) {
   const {
     inspectorEnabled,
+    bubbleMode,
     triggerKey,
     pluginId,
     currentRevision,
@@ -17,21 +18,29 @@ export default function OverlayGatePanel({ width = 420 }: OverlayGatePanelProps)
     proposedText,
     submitting,
     result,
+    stagedChanges,
+    unanchoredStagedChanges,
     changes,
     changesLoading,
     changesError,
     changesTab,
     setProposedText,
-    submit,
+    addOrUpdateStagedChange,
+    removeStagedChange,
+    clearStagedChanges,
+    submitStagedChanges,
     refreshChanges,
     setChangesTab,
+    jumpToStagedChange,
+    focusStagedChange,
   } = useSourceInspectorContext();
 
   if (!inspectorEnabled) {
     return null;
   }
 
-  const canSubmit = Boolean(selection && proposedText.trim() && !submitting);
+  const canStage = Boolean(selection && proposedText.trim() && !submitting);
+  const canSubmitBatch = Boolean(stagedChanges.length > 0 && !submitting);
   const visibleChanges =
     changesTab === "all"
       ? changes
@@ -114,23 +123,140 @@ export default function OverlayGatePanel({ width = 420 }: OverlayGatePanelProps)
         </div>
       ) : null}
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
         <button
-          onClick={submit}
-          disabled={!canSubmit}
+          onClick={addOrUpdateStagedChange}
+          disabled={!canStage}
           style={{
             flex: 1,
             padding: "8px 10px",
             borderRadius: 6,
             border: "1px solid #22c55e",
-            background: canSubmit ? "#22c55e" : "#475569",
+            background: canStage ? "#22c55e" : "#475569",
             color: "#111827",
             fontWeight: 600,
-            cursor: canSubmit ? "pointer" : "not-allowed",
+            cursor: canStage ? "pointer" : "not-allowed",
           }}
         >
-          {submitting ? "Submitting..." : "Submit changes"}
+          Add/Update staged
         </button>
+      </div>
+
+      <div style={{ borderTop: "1px solid #334155", paddingTop: 8, marginBottom: 10 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>Staged Summary</div>
+        <div style={{ marginBottom: 8 }}>
+          Total staged: <code>{stagedChanges.length}</code>
+        </div>
+        {bubbleMode === "staged" ? (
+          <div style={{ opacity: 0.85, marginBottom: 8 }}>
+            Staged items are edited through on-page bubbles.
+          </div>
+        ) : null}
+
+        {unanchoredStagedChanges.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+            <div style={{ fontWeight: 600 }}>Unanchored staged changes</div>
+            {unanchoredStagedChanges.map((change) => (
+              <div
+                key={change.sourceLoc}
+                style={{
+                  border: "1px solid #334155",
+                  borderRadius: 8,
+                  padding: 8,
+                  background: "rgba(15, 23, 42, 0.5)",
+                }}
+              >
+                <div>
+                  <strong>{change.tagName}</strong> at <code>{change.sourceLoc}</code>
+                </div>
+                <div style={{ marginTop: 6, display: "flex", gap: 6 }}>
+                  <button
+                    onClick={() => {
+                      jumpToStagedChange(change.sourceLoc);
+                    }}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #334155",
+                      background: "transparent",
+                      color: "#f8fafc",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Jump
+                  </button>
+                  <button
+                    onClick={() => {
+                      focusStagedChange(change.sourceLoc);
+                    }}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #334155",
+                      background: "transparent",
+                      color: "#f8fafc",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Select
+                  </button>
+                  <button
+                    onClick={() => {
+                      removeStagedChange(change.sourceLoc);
+                    }}
+                    style={{
+                      marginLeft: "auto",
+                      padding: "4px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #ef4444",
+                      background: "transparent",
+                      color: "#fecaca",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => {
+              void submitStagedChanges();
+            }}
+            disabled={!canSubmitBatch}
+            style={{
+              flex: 1,
+              padding: "8px 10px",
+              borderRadius: 6,
+              border: "1px solid #22c55e",
+              background: canSubmitBatch ? "#22c55e" : "#475569",
+              color: "#111827",
+              fontWeight: 600,
+              cursor: canSubmitBatch ? "pointer" : "not-allowed",
+            }}
+          >
+            {submitting ? "Submitting..." : `Submit staged changes (${stagedChanges.length})`}
+          </button>
+          <button
+            onClick={clearStagedChanges}
+            disabled={stagedChanges.length === 0 || submitting}
+            style={{
+              padding: "8px 10px",
+              borderRadius: 6,
+              border: "1px solid #334155",
+              background: "transparent",
+              color: "#f8fafc",
+              cursor: stagedChanges.length > 0 && !submitting ? "pointer" : "not-allowed",
+              opacity: stagedChanges.length > 0 && !submitting ? 1 : 0.6,
+            }}
+          >
+            Clear staged
+          </button>
+        </div>
       </div>
 
       <div style={{ borderTop: "1px solid #334155", paddingTop: 8, marginBottom: 10 }}>

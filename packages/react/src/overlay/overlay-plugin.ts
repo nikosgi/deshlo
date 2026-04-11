@@ -1,4 +1,7 @@
 export {
+  type OverlayBatchSubmitHandler,
+  type OverlayBatchSubmitInput,
+  type OverlayBatchSubmitResult,
   buildOverlaySubmitInput,
   normalizeOverlayText,
   toOverlayErrorResult,

@@ -6,6 +6,9 @@ export {
   type OverlayPluginProviderProps,
 } from "./overlay/overlay-plugin-provider";
 export type {
+  OverlayBatchSubmitHandler,
+  OverlayBatchSubmitInput,
+  OverlayBatchSubmitResult,
   OverlayListProposedChangesHandler,
   OverlayPlugin,
   OverlayPluginContext,

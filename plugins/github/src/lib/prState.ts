@@ -2,6 +2,8 @@ import { normalizeTextForComparison } from "./sourceLoc";
 
 export const DESHLO_STATE_START_MARKER = "<!-- deshlo:state:start -->";
 export const DESHLO_STATE_END_MARKER = "<!-- deshlo:state:end -->";
+const DESHLO_HIDDEN_BLOCK_START = "<!-- deshlo:state:start";
+const DESHLO_HIDDEN_BLOCK_END = "deshlo:state:end -->";
 
 const MANAGED_BY = "deshlo/source-inspector";
 const STATE_VERSION = 1;
@@ -42,6 +44,8 @@ export interface UpsertManagedChangeInput {
 interface MarkerRange {
   start: number;
   end: number;
+  jsonStartOffset: number;
+  jsonEndOffset: number;
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -92,6 +96,32 @@ function isManagedPrState(value: unknown): value is ManagedPrState {
 }
 
 function findMarkerRange(body: string): MarkerRange | null {
+  const hiddenStartIndex = body.indexOf(DESHLO_HIDDEN_BLOCK_START);
+  if (hiddenStartIndex >= 0) {
+    const hiddenStartTail = body
+      .slice(
+        hiddenStartIndex + DESHLO_HIDDEN_BLOCK_START.length,
+        hiddenStartIndex + DESHLO_HIDDEN_BLOCK_START.length + 4
+      )
+      .trimStart();
+    if (hiddenStartTail.startsWith("-->")) {
+      // Legacy split-marker format.
+    } else {
+    const hiddenEndIndex = body.indexOf(
+      DESHLO_HIDDEN_BLOCK_END,
+      hiddenStartIndex + DESHLO_HIDDEN_BLOCK_START.length
+    );
+    if (hiddenEndIndex >= 0) {
+      return {
+        start: hiddenStartIndex,
+        end: hiddenEndIndex + DESHLO_HIDDEN_BLOCK_END.length,
+        jsonStartOffset: hiddenStartIndex + DESHLO_HIDDEN_BLOCK_START.length,
+        jsonEndOffset: hiddenEndIndex,
+      };
+    }
+    }
+  }
+
   const startIndex = body.indexOf(DESHLO_STATE_START_MARKER);
   if (startIndex < 0) {
     return null;
@@ -105,6 +135,8 @@ function findMarkerRange(body: string): MarkerRange | null {
   return {
     start: startIndex,
     end: endIndex + DESHLO_STATE_END_MARKER.length,
+    jsonStartOffset: startIndex + DESHLO_STATE_START_MARKER.length,
+    jsonEndOffset: endIndex,
   };
 }
 
@@ -114,9 +146,7 @@ function getBodyStateJson(body: string): string | null {
     return null;
   }
 
-  const startOffset = markerRange.start + DESHLO_STATE_START_MARKER.length;
-  const endOffset = markerRange.end - DESHLO_STATE_END_MARKER.length;
-  const json = body.slice(startOffset, endOffset).trim();
+  const json = body.slice(markerRange.jsonStartOffset, markerRange.jsonEndOffset).trim();
 
   return json || null;
 }
@@ -128,9 +158,9 @@ function createChangeId(sourceLoc: string, updatedAt: string): string {
 }
 
 function buildStateBlock(state: ManagedPrState): string {
-  return `${DESHLO_STATE_START_MARKER}
+  return `<!-- deshlo:state:start
 ${JSON.stringify(state, null, 2)}
-${DESHLO_STATE_END_MARKER}`;
+deshlo:state:end -->`;
 }
 
 export function parseManagedPrState(body: string | null | undefined): ManagedPrState | null {
