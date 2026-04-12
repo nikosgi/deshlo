@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { captureAnnotationAnchor, resolveAnnotationPosition } from "./anchor";
+import { BUBBLE_SIZE, captureAnnotationAnchor, resolveAnnotationPosition } from "./anchor";
 
 interface FakeElement extends Partial<HTMLElement> {
   tagName: string;
@@ -175,5 +175,270 @@ describe("annotation anchor", () => {
 
     expect(resolved.anchored).toBe(false);
     expect(resolved.confidence).toBe(0);
+  });
+
+  it("clamps scroll-chain bubble position within nearest container bounds", () => {
+    (globalThis as any).window = {
+      innerWidth: 1000,
+      innerHeight: 1000,
+      scrollX: 0,
+      scrollY: 0,
+    };
+
+    class FakeHTMLElement {}
+    const OriginalHTMLElement = (globalThis as any).HTMLElement;
+    (globalThis as any).HTMLElement = FakeHTMLElement;
+
+    const container = new FakeHTMLElement() as any;
+    container.scrollTop = 0;
+    container.scrollLeft = 0;
+    container.getBoundingClientRect = () =>
+      ({
+        left: 120,
+        top: 250,
+        width: 420,
+        height: 500,
+      }) as DOMRect;
+
+    (globalThis as any).document = {
+      getElementById(id: string) {
+        return id === "scroll-pane" ? container : null;
+      },
+    };
+
+    const resolved = resolveAnnotationPosition({
+      viewport: { width: 1000, height: 1000 },
+      pageScroll: { x: 0, y: 0 },
+      targetRect: { left: 140, top: 280, width: 120, height: 30 },
+      targetPoint: { x: 180, y: 310 },
+      normalized: {
+        viewportXRatio: 0.5,
+        viewportYRatio: 0.5,
+        rectXRatio: 0.2,
+        rectYRatio: 0.4,
+      },
+      scrollChain: [
+        {
+          fingerprint: {
+            tagName: "div",
+            id: "scroll-pane",
+          },
+          scrollTop: 0,
+          scrollLeft: 0,
+          offsetX: 180,
+          offsetY: 2200,
+        },
+      ],
+    });
+
+    expect(resolved.anchored).toBe(true);
+    expect(resolved.top).toBe(250 + 500 - BUBBLE_SIZE);
+    expect(resolved.left).toBeGreaterThanOrEqual(120);
+    expect(resolved.left).toBeLessThanOrEqual(120 + 420 - BUBBLE_SIZE);
+
+    (globalThis as any).HTMLElement = OriginalHTMLElement;
+  });
+
+  it("keeps bubble visible in viewport when nearest container is fully offscreen", () => {
+    (globalThis as any).window = {
+      innerWidth: 1000,
+      innerHeight: 1000,
+      scrollX: 0,
+      scrollY: 0,
+    };
+
+    class FakeHTMLElement {}
+    const OriginalHTMLElement = (globalThis as any).HTMLElement;
+    (globalThis as any).HTMLElement = FakeHTMLElement;
+
+    const container = new FakeHTMLElement() as any;
+    container.scrollTop = 0;
+    container.scrollLeft = 0;
+    container.getBoundingClientRect = () =>
+      ({
+        left: 120,
+        top: -900,
+        width: 420,
+        height: 500,
+      }) as DOMRect;
+
+    (globalThis as any).document = {
+      getElementById(id: string) {
+        return id === "scroll-pane-offscreen" ? container : null;
+      },
+    };
+
+    const resolved = resolveAnnotationPosition({
+      viewport: { width: 1000, height: 1000 },
+      pageScroll: { x: 0, y: 0 },
+      targetRect: { left: 140, top: 280, width: 120, height: 30 },
+      targetPoint: { x: 180, y: 310 },
+      normalized: {
+        viewportXRatio: 0.5,
+        viewportYRatio: 0.5,
+        rectXRatio: 0.2,
+        rectYRatio: 0.4,
+      },
+      scrollChain: [
+        {
+          fingerprint: {
+            tagName: "div",
+            id: "scroll-pane-offscreen",
+          },
+          scrollTop: 0,
+          scrollLeft: 0,
+          offsetX: 180,
+          offsetY: 1200,
+        },
+      ],
+    });
+
+    expect(resolved.anchored).toBe(true);
+    expect(resolved.top).toBe(0);
+    expect(resolved.left).toBeGreaterThanOrEqual(0);
+    expect(resolved.left).toBeLessThanOrEqual(1000 - BUBBLE_SIZE);
+
+    (globalThis as any).HTMLElement = OriginalHTMLElement;
+  });
+
+  it("pins to viewport edge when nested clipping ancestors move fully out of view", () => {
+    (globalThis as any).window = {
+      innerWidth: 1000,
+      innerHeight: 900,
+      scrollX: 0,
+      scrollY: 0,
+    };
+    (globalThis as any).getComputedStyle = (element: any) => ({
+      overflowY: element.__overflowY || "visible",
+      overflowX: element.__overflowX || "visible",
+    });
+
+    class FakeHTMLElement {}
+    const OriginalHTMLElement = (globalThis as any).HTMLElement;
+    (globalThis as any).HTMLElement = FakeHTMLElement;
+
+    const outer = new FakeHTMLElement() as any;
+    outer.__overflowY = "auto";
+    outer.__overflowX = "hidden";
+    outer.parentElement = null;
+    outer.getBoundingClientRect = () =>
+      ({
+        left: 260,
+        top: -210,
+        width: 500,
+        height: 120,
+      }) as DOMRect;
+
+    const inner = new FakeHTMLElement() as any;
+    inner.scrollTop = 0;
+    inner.scrollLeft = 0;
+    inner.parentElement = outer;
+    inner.__overflowY = "auto";
+    inner.__overflowX = "hidden";
+    inner.getBoundingClientRect = () =>
+      ({
+        left: 285.5,
+        top: -190,
+        width: 235.5,
+        height: 300,
+      }) as DOMRect;
+
+    (globalThis as any).document = {
+      getElementById(id: string) {
+        return id === "nested-inner-offscreen" ? inner : null;
+      },
+    };
+
+    const resolved = resolveAnnotationPosition({
+      viewport: { width: 1000, height: 900 },
+      pageScroll: { x: 0, y: 0 },
+      targetRect: { left: 300, top: 40, width: 120, height: 30 },
+      targetPoint: { x: 320, y: 44 },
+      normalized: {
+        viewportXRatio: 0.3,
+        viewportYRatio: 0.1,
+        rectXRatio: 0.2,
+        rectYRatio: 0.4,
+      },
+      scrollChain: [
+        {
+          fingerprint: {
+            tagName: "div",
+            id: "nested-inner-offscreen",
+          },
+          scrollTop: 0,
+          scrollLeft: 0,
+          offsetX: 30,
+          offsetY: 2500,
+        },
+      ],
+    });
+
+    expect(resolved.anchored).toBe(true);
+    expect(resolved.top).toBe(0);
+    expect(resolved.left).toBeGreaterThanOrEqual(260);
+    expect(resolved.left).toBeLessThanOrEqual(1000 - BUBBLE_SIZE);
+
+    (globalThis as any).HTMLElement = OriginalHTMLElement;
+  });
+
+  it("treats sub-epsilon visibility as offscreen and pins to nearest edge", () => {
+    (globalThis as any).window = {
+      innerWidth: 1000,
+      innerHeight: 900,
+      scrollX: 0,
+      scrollY: 0,
+    };
+
+    class FakeHTMLElement {}
+    const OriginalHTMLElement = (globalThis as any).HTMLElement;
+    (globalThis as any).HTMLElement = FakeHTMLElement;
+
+    const container = new FakeHTMLElement() as any;
+    container.scrollTop = 0;
+    container.scrollLeft = 0;
+    container.getBoundingClientRect = () =>
+      ({
+        left: 285.5,
+        top: -224,
+        width: 235.5,
+        height: 248.1,
+      }) as DOMRect;
+
+    (globalThis as any).document = {
+      getElementById(id: string) {
+        return id === "tiny-visible-pane" ? container : null;
+      },
+    };
+
+    const resolved = resolveAnnotationPosition({
+      viewport: { width: 1000, height: 900 },
+      pageScroll: { x: 0, y: 0 },
+      targetRect: { left: 285.5, top: 0, width: 120, height: 30 },
+      targetPoint: { x: 300, y: 10 },
+      normalized: {
+        viewportXRatio: 0.3,
+        viewportYRatio: 0.1,
+        rectXRatio: 0.2,
+        rectYRatio: 0.4,
+      },
+      scrollChain: [
+        {
+          fingerprint: {
+            tagName: "div",
+            id: "tiny-visible-pane",
+          },
+          scrollTop: 0,
+          scrollLeft: 0,
+          offsetX: 50,
+          offsetY: 248.1,
+        },
+      ],
+    });
+
+    expect(resolved.anchored).toBe(true);
+    expect(resolved.top).toBe(0);
+
+    (globalThis as any).HTMLElement = OriginalHTMLElement;
   });
 });

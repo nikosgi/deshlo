@@ -88,6 +88,81 @@ function resolveConnectorStartPoint(
   };
 }
 
+type VisibilityRect = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
+function intersectsAxis(minA: number, maxA: number, minB: number, maxB: number): boolean {
+  return maxA > minB && minA < maxB;
+}
+
+function isElementVisibleInViewportAndScrollClips(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return false;
+  }
+
+  let visible: VisibilityRect = {
+    left: rect.left,
+    top: rect.top,
+    right: rect.right,
+    bottom: rect.bottom,
+  };
+
+  const viewport: VisibilityRect = {
+    left: 0,
+    top: 0,
+    right: window.innerWidth,
+    bottom: window.innerHeight,
+  };
+
+  if (
+    !intersectsAxis(visible.left, visible.right, viewport.left, viewport.right) ||
+    !intersectsAxis(visible.top, visible.bottom, viewport.top, viewport.bottom)
+  ) {
+    return false;
+  }
+
+  visible = {
+    left: Math.max(visible.left, viewport.left),
+    top: Math.max(visible.top, viewport.top),
+    right: Math.min(visible.right, viewport.right),
+    bottom: Math.min(visible.bottom, viewport.bottom),
+  };
+
+  let cursor: HTMLElement | null = element.parentElement;
+  while (cursor) {
+    const style = getComputedStyle(cursor);
+    const clipsX = ["hidden", "scroll", "auto", "clip"].includes(style.overflowX);
+    const clipsY = ["hidden", "scroll", "auto", "clip"].includes(style.overflowY);
+
+    if (clipsX || clipsY) {
+      const clip = cursor.getBoundingClientRect();
+
+      if (
+        (clipsX && !intersectsAxis(visible.left, visible.right, clip.left, clip.right)) ||
+        (clipsY && !intersectsAxis(visible.top, visible.bottom, clip.top, clip.bottom))
+      ) {
+        return false;
+      }
+
+      visible = {
+        left: clipsX ? Math.max(visible.left, clip.left) : visible.left,
+        right: clipsX ? Math.min(visible.right, clip.right) : visible.right,
+        top: clipsY ? Math.max(visible.top, clip.top) : visible.top,
+        bottom: clipsY ? Math.min(visible.bottom, clip.bottom) : visible.bottom,
+      };
+    }
+
+    cursor = cursor.parentElement;
+  }
+
+  return true;
+}
+
 export default function AnnotationBubbles() {
   const {
     enabled,
@@ -110,6 +185,7 @@ export default function AnnotationBubbles() {
   } = useAnnotationContext();
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [autoCollapsed, setAutoCollapsed] = useState<Record<string, boolean>>({});
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [dropOverrides, setDropOverrides] = useState<Record<string, DropOverride>>({});
@@ -142,22 +218,31 @@ export default function AnnotationBubbles() {
         }
       }
 
-      if (threadIds.size === 0) {
-        setHighlightRects([]);
-        return;
-      }
-
       const threadById = new Map(visibleThreads.map((thread) => [thread.threadId, thread]));
       const nextRects: HighlightRect[] = [];
+      const expandedToClose = new Set<string>();
+      const expandedToReopen = new Set<string>();
 
       for (const threadId of threadIds) {
         const thread = threadById.get(threadId);
         if (!thread) {
           continue;
         }
+        const isExpanded = Boolean(expanded[threadId]);
 
         const linked = resolveAnchorLinkedElement(thread.anchor);
         if (!linked) {
+          if (isExpanded) {
+            expandedToClose.add(threadId);
+          }
+          continue;
+        }
+
+        const visible = isElementVisibleInViewportAndScrollClips(linked);
+        if (!visible) {
+          if (isExpanded) {
+            expandedToClose.add(threadId);
+          }
           continue;
         }
 
@@ -170,7 +255,64 @@ export default function AnnotationBubbles() {
         });
       }
 
+      for (const thread of visibleThreads) {
+        const threadId = thread.threadId;
+        if (!autoCollapsed[threadId] || expanded[threadId]) {
+          continue;
+        }
+
+        const linked = resolveAnchorLinkedElement(thread.anchor);
+        if (!linked) {
+          continue;
+        }
+
+        const visible = isElementVisibleInViewportAndScrollClips(linked);
+        if (visible) {
+          expandedToReopen.add(threadId);
+        }
+      }
+
       setHighlightRects(nextRects);
+
+      if (expandedToClose.size > 0 || expandedToReopen.size > 0) {
+        setExpanded((previous) => {
+          let changed = false;
+          const next = { ...previous };
+          for (const threadId of expandedToClose) {
+            if (next[threadId]) {
+              next[threadId] = false;
+              changed = true;
+            }
+          }
+          for (const threadId of expandedToReopen) {
+            if (!next[threadId]) {
+              next[threadId] = true;
+              changed = true;
+            }
+          }
+          return changed ? next : previous;
+        });
+      }
+
+      if (expandedToClose.size > 0 || expandedToReopen.size > 0) {
+        setAutoCollapsed((previous) => {
+          let changed = false;
+          const next = { ...previous };
+          for (const threadId of expandedToClose) {
+            if (!next[threadId]) {
+              next[threadId] = true;
+              changed = true;
+            }
+          }
+          for (const threadId of expandedToReopen) {
+            if (next[threadId]) {
+              delete next[threadId];
+              changed = true;
+            }
+          }
+          return changed ? next : previous;
+        });
+      }
     };
 
     const requestUpdate = () => {
@@ -191,7 +333,26 @@ export default function AnnotationBubbles() {
       window.removeEventListener("resize", requestUpdate);
       window.removeEventListener("scroll", requestUpdate, true);
     };
-  }, [dragState?.linkedRect, expanded, hoveredThreadId, visibleThreads]);
+  }, [autoCollapsed, dragState?.linkedRect, expanded, hoveredThreadId, visibleThreads]);
+
+  useEffect(() => {
+    const visibleIds = new Set(visibleThreads.map((thread) => thread.threadId));
+    setAutoCollapsed((previous) => {
+      let changed = false;
+      const next: Record<string, boolean> = {};
+      for (const [threadId, value] of Object.entries(previous)) {
+        if (value && visibleIds.has(threadId)) {
+          next[threadId] = true;
+        } else if (!visibleIds.has(threadId)) {
+          changed = true;
+        }
+      }
+      if (!changed && Object.keys(next).length === Object.keys(previous).length) {
+        return previous;
+      }
+      return next;
+    });
+  }, [visibleThreads]);
 
   useEffect(() => {
     if (Object.keys(dropOverrides).length === 0) {
@@ -662,6 +823,14 @@ export default function AnnotationBubbles() {
                   }
 
                   if (!current.moved) {
+                    setAutoCollapsed((previous) => {
+                      if (!previous[thread.threadId]) {
+                        return previous;
+                      }
+                      const next = { ...previous };
+                      delete next[thread.threadId];
+                      return next;
+                    });
                     setExpanded((previous) => ({
                       ...previous,
                       [thread.threadId]: !previous[thread.threadId],

@@ -23,6 +23,9 @@ export default function HomePage() {
       <p>
         <Link href="/about">Go to About page</Link>
       </p>
+      <p>
+        <Link href="/scenarios">Go to Scenario Playground</Link>
+      </p>
     </main>
   );
 }

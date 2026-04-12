@@ -540,6 +540,7 @@ export default function AnnotationPanel({
   const [providerCommitHistory, setProviderCommitHistory] = useState<AnnotationCommitHistoryEntry[]>([]);
   const [githubLoading, setGithubLoading] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
+  const [minimized, setMinimized] = useState(false);
 
   const commitStats = useMemo(() => {
     const byCommit = new Map<
@@ -697,6 +698,32 @@ export default function AnnotationPanel({
     return null;
   }
 
+  if (minimized) {
+    return (
+      <button
+        data-deshlo-annotation-ui="1"
+        onClick={() => {
+          setMinimized(false);
+        }}
+        style={{
+          position: "fixed",
+          right: 12,
+          bottom: 12,
+          zIndex: 10000,
+          padding: "8px 12px",
+          borderRadius: 999,
+          border: "1px solid #0ea5e9",
+          background: "rgba(17, 17, 17, 0.96)",
+          color: "#f8fafc",
+          fontSize: 12,
+          cursor: "pointer",
+        }}
+      >
+        Annotations ({currentThreads.length + staleThreads.length})
+      </button>
+    );
+  }
+
   return (
     <div
       data-deshlo-annotation-ui="1"
@@ -717,7 +744,33 @@ export default function AnnotationPanel({
         lineHeight: 1.45,
       }}
     >
-      <div style={{ fontWeight: 700, marginBottom: 6 }}>Live Annotations</div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+          marginBottom: 6,
+        }}
+      >
+        <div style={{ fontWeight: 700 }}>Live Annotations</div>
+        <button
+          onClick={() => {
+            setMinimized(true);
+          }}
+          style={{
+            padding: "2px 8px",
+            borderRadius: 6,
+            border: "1px solid #334155",
+            background: "transparent",
+            color: "#f8fafc",
+            cursor: "pointer",
+            fontSize: 11,
+          }}
+        >
+          Minimize
+        </button>
+      </div>
       <div style={{ marginBottom: 8 }}>
         Hold {triggerKey.toUpperCase()} + click anywhere to create an annotation.
       </div>

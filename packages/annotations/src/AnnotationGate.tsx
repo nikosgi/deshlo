@@ -50,6 +50,14 @@ const UNKNOWN_IDENTITY: RuntimeIdentity = {
   commitSha: "unknown",
 };
 
+function resolveInitialIdentity(preferredCommitSha?: string): RuntimeIdentity {
+  const normalizedCommitSha = normalizeCommitSha(preferredCommitSha);
+  return {
+    ...UNKNOWN_IDENTITY,
+    commitSha: normalizedCommitSha || UNKNOWN_IDENTITY.commitSha,
+  };
+}
+
 function isTriggerPressed(
   event: Pick<MouseEvent, "altKey" | "shiftKey" | "metaKey" | "ctrlKey">,
   triggerKey: AnnotationTriggerKey
@@ -246,11 +254,9 @@ export default function AnnotationGate({
   const [threadPositions, setThreadPositions] = useState<AnnotationContextValue["threadPositions"]>({});
   const pointerPointRef = useRef<AnnotationPoint | null>(null);
   // Keep first render deterministic for SSR hydration; resolve real runtime identity after mount.
-  const [identity, setIdentity] = useState<RuntimeIdentity>(() =>
-    resolveRuntimeIdentity(commitSha)
-  );
+  const [identity, setIdentity] = useState<RuntimeIdentity>(() => resolveInitialIdentity(commitSha));
   const [selectedCommitSha, setSelectedCommitSha] = useState<string>(
-    resolveRuntimeIdentity(commitSha).commitSha
+    resolveInitialIdentity(commitSha).commitSha
   );
 
   const pageKey = identity.pageKey;

@@ -18,6 +18,27 @@ export interface ResolvedAnnotationPosition {
 export const BUBBLE_SIZE = 24;
 export const BUBBLE_RADIUS = BUBBLE_SIZE / 2;
 const BUBBLE_EDGE_MARGIN = 8;
+const VISIBLE_BOUNDS_EPSILON = 1;
+
+interface BoundsRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+interface AxisRange {
+  min: number;
+  max: number;
+}
+
+function rectRight(rect: Pick<DOMRect, "left" | "width" | "right">): number {
+  return Number.isFinite(rect.right) ? Number(rect.right) : rect.left + rect.width;
+}
+
+function rectBottom(rect: Pick<DOMRect, "top" | "height" | "bottom">): number {
+  return Number.isFinite(rect.bottom) ? Number(rect.bottom) : rect.top + rect.height;
+}
 
 function toClassTokens(value: string): string[] {
   return value
@@ -133,6 +154,100 @@ function toBubblePosition(point: AnnotationPoint): AnnotationPoint {
       BUBBLE_EDGE_MARGIN,
       Math.max(window.innerHeight - BUBBLE_SIZE - BUBBLE_EDGE_MARGIN, BUBBLE_EDGE_MARGIN)
     ),
+  };
+}
+
+function clampBubbleToContainer(position: AnnotationPoint, rect: BoundsRect): AnnotationPoint {
+  const minLeft = rect.left;
+  const minTop = rect.top;
+  const maxLeft = rect.left + rect.width - BUBBLE_SIZE;
+  const maxTop = rect.top + rect.height - BUBBLE_SIZE;
+
+  return {
+    x: clamp(position.x, minLeft, maxLeft < minLeft ? minLeft : maxLeft),
+    y: clamp(position.y, minTop, maxTop < minTop ? minTop : maxTop),
+  };
+}
+
+function normalizeAxisRange(range: AxisRange): AxisRange {
+  if (!Number.isFinite(range.min) || !Number.isFinite(range.max)) {
+    return { min: 0, max: 0 };
+  }
+  if (range.max < range.min) {
+    return {
+      min: range.min,
+      max: range.min,
+    };
+  }
+  return range;
+}
+
+function toBubbleAxisRange(minEdge: number, maxEdge: number): AxisRange {
+  return normalizeAxisRange({
+    min: minEdge,
+    max: maxEdge - BUBBLE_SIZE,
+  });
+}
+
+function collapseAxisToNearestEdge(current: AxisRange, clip: AxisRange): AxisRange {
+  if (current.max <= clip.min + VISIBLE_BOUNDS_EPSILON) {
+    return { min: clip.min, max: clip.min };
+  }
+  if (current.min >= clip.max - VISIBLE_BOUNDS_EPSILON) {
+    return { min: clip.max, max: clip.max };
+  }
+
+  const center = (current.min + current.max) / 2;
+  const nearest =
+    Math.abs(center - clip.min) <= Math.abs(center - clip.max) ? clip.min : clip.max;
+  return { min: nearest, max: nearest };
+}
+
+function intersectAxisRange(current: AxisRange, clip: AxisRange): AxisRange {
+  const overlapMin = Math.max(current.min, clip.min);
+  const overlapMax = Math.min(current.max, clip.max);
+  if (overlapMax - overlapMin >= VISIBLE_BOUNDS_EPSILON) {
+    return {
+      min: overlapMin,
+      max: overlapMax,
+    };
+  }
+  return collapseAxisToNearestEdge(current, clip);
+}
+
+function resolveVisibleBounds(container: HTMLElement): BoundsRect {
+  const containerRect = container.getBoundingClientRect();
+  const clipValues = new Set(["hidden", "scroll", "auto", "clip"]);
+
+  let xRange = toBubbleAxisRange(containerRect.left, rectRight(containerRect));
+  let yRange = toBubbleAxisRange(containerRect.top, rectBottom(containerRect));
+
+  let cursor: HTMLElement | null = container.parentElement;
+  while (cursor) {
+    const style = getComputedStyle(cursor);
+    const clipX = clipValues.has(style.overflowX);
+    const clipY = clipValues.has(style.overflowY);
+    if (clipX || clipY) {
+      const rect = cursor.getBoundingClientRect();
+      if (clipX) {
+        xRange = intersectAxisRange(xRange, toBubbleAxisRange(rect.left, rectRight(rect)));
+      }
+      if (clipY) {
+        yRange = intersectAxisRange(yRange, toBubbleAxisRange(rect.top, rectBottom(rect)));
+      }
+    }
+
+    cursor = cursor.parentElement;
+  }
+
+  xRange = intersectAxisRange(xRange, toBubbleAxisRange(0, window.innerWidth));
+  yRange = intersectAxisRange(yRange, toBubbleAxisRange(0, window.innerHeight));
+
+  return {
+    left: xRange.min,
+    top: yRange.min,
+    width: Math.max(BUBBLE_SIZE, xRange.max - xRange.min + BUBBLE_SIZE),
+    height: Math.max(BUBBLE_SIZE, yRange.max - yRange.min + BUBBLE_SIZE),
   };
 }
 
@@ -315,7 +430,8 @@ function resolveFromScrollChain(anchor: AnnotationAnchor): ResolvedAnnotationPos
     y: rect.top + nearest.offsetY - container.scrollTop,
   };
 
-  const bubble = toBubblePosition(point);
+  const visibleBounds = resolveVisibleBounds(container);
+  const bubble = clampBubbleToContainer(toBubblePosition(point), visibleBounds);
   return {
     anchored: true,
     confidence: 0.92,
