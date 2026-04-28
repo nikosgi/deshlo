@@ -15,7 +15,7 @@ export default function HomePage() {
           <p>This element should get data source coordinates in webpack mode.</p>
         </article>
         <article className="card">
-          <h2>Card B</h2>
+          <h2>Card c</h2>
           <p>Use this page to verify loader injection behavior.</p>
         </article>
       </section>
